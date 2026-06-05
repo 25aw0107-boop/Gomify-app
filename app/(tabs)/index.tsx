@@ -1,98 +1,276 @@
+import { AntDesign, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const router = useRouter();
+  const [showSplash, setShowSplash] = useState(true);
+  const splashOpacity = useRef(new Animated.Value(1)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const contentTranslate = useRef(new Animated.Value(20)).current;
+  const sway = useRef(new Animated.Value(0)).current;
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(contentOpacity, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.spring(contentTranslate, {
+        toValue: 0,
+        tension: 40,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const swayAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(sway, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.out(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(sway, {
+          toValue: -1,
+          duration: 1700,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(sway, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.in(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    swayAnimation.start();
+
+    const timeout = setTimeout(() => {
+      Animated.timing(splashOpacity, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }).start(() => {
+        swayAnimation.stop();
+        setShowSplash(false);
+      });
+    }, 3000);
+
+    return () => {
+      clearTimeout(timeout);
+      swayAnimation.stop();
+    };
+  }, [contentOpacity, contentTranslate, splashOpacity, sway]);
+
+  if (showSplash) {
+    return (
+      <Animated.View style={[styles.splashScreen, { opacity: splashOpacity }]}> 
+        <Animated.View
+          style={{
+            alignItems: 'center',
+            opacity: contentOpacity,
+            transform: [{ translateY: contentTranslate }],
+          }}
+        >
+          <Animated.View
+            style={{
+              transform: [
+                {
+                  translateX: sway.interpolate({
+                    inputRange: [-1, 0, 1],
+                    outputRange: [-24, 0, 24],
+                  }),
+                },
+                {
+                  rotate: sway.interpolate({
+                    inputRange: [-1, 0, 1],
+                    outputRange: ['-8deg', '0deg', '8deg'],
+                  }),
+                },
+              ],
+            }}
+          >
+            <Image
+              source={require('@/assets/images/Go Green Recycle Container.png')}
+              style={styles.splashLogo}
+              contentFit="contain"
+            />
+          </Animated.View>
+          <ActivityIndicator size="large" color="#20bc5e" style={styles.loadingSpinner} />
+          <ThemedText type="default" style={styles.loadingText}>
+            Loading...
+          </ThemedText>
+        </Animated.View>
+      </Animated.View>
+      
+    );
+  }
+
+  return (
+    <View style={styles.screen}>
+      <View style={styles.headerImageContainer}>
+        <ThemedText
+          type="title"
+          style={styles.headerTitle}
+          lightColor="#000000"
+          darkColor="#000000"
+        >
+          Gomify
         </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        <Image
+          source={require('@/assets/images/Go Green Recycle Container.png')}
+          style={styles.reactLogo}
+          contentFit="contain"
+        />
+      </View>
+
+      <View style={styles.formContainer}>
+        <Pressable
+          onPress={() => router.push('/signin-google' as const)}
+          style={({ pressed }) => [
+            styles.actionButton,
+            styles.googleButton,
+            pressed && styles.buttonPressed,
+          ]}
+        >
+          <View style={styles.buttonContent}>
+            <AntDesign name="google" size={20} color="#4285F4" style={styles.buttonIcon} />
+            <ThemedText type="defaultSemiBold" style={styles.googleButtonText}>
+              Sign in with Google
+            </ThemedText>
+          </View>
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.push('/signin-email' as const)}
+          style={({ pressed }) => [
+            styles.actionButton,
+            styles.emailButton,
+            pressed && styles.buttonPressed,
+          ]}
+        >
+          <View style={styles.buttonContent}>
+            <MaterialIcons name="email" size={20} color="#ffffff" style={styles.buttonIcon} />
+            <ThemedText type="defaultSemiBold" style={styles.emailButtonText}>
+              Continue with Email
+            </ThemedText>
+          </View>
+        </Pressable>
+      </View>
+
+      <View style={styles.signupContainer}>
+          <ThemedText type="default" style={styles.signupText}>
+            Don&apos;t have an account?{' '}
+            <ThemedText type="defaultSemiBold" style={styles.signupLink}>
+              Sign up
+            </ThemedText>
+          </ThemedText>
+      </View>
+    </View>
+    
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  screen: {
+    flex: 1,
+    backgroundColor: '#fff',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'flex-start',
+    paddingTop: 125,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  headerImageContainer: {
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  headerTitle: {
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 40,
+    fontSize: 40,
+    lineHeight: 48,
   },
   reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+    height: 140,
+    width: 210,
+    marginTop: 0,
+  },
+  splashLogo: {
+    height: 180,
+    width: 270,
+    marginTop:20,
+  },
+  formContainer: {
+    width: '100%',
+    paddingHorizontal: 32,
+    marginTop: 20,
+  },
+  actionButton: {
+    height: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonIcon: {
+    marginRight: 12,
+  },
+  googleButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#4285F4',
+  },
+  emailButton: {
+    backgroundColor: '#2563EB',
+  },
+  buttonPressed: {
+    opacity: 0.8,
+  },
+  googleButtonText: {
+    color: '#4285F4',
+  },
+  emailButtonText: {
+    color: '#ffffff',
+  },
+  signupContainer: {
     position: 'absolute',
+    bottom: 32,
+    alignItems: 'center',
+  },
+  signupText: {
+    color: '#666666',
+    fontSize: 14,
+  },
+  signupLink: {
+    color: '#2563EB',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  loadingSpinner: {
+    marginTop: 24,
+  },
+  splashScreen: {
+    flex: 1,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 80,
   },
 });

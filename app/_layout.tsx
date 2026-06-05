@@ -17,6 +17,11 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        <Stack.Screen name="signin-apple" options={{ headerShown: false, animation: 'none' }} />
+        <Stack.Screen name="signin-google" options={{ headerShown: false, animation: 'none' }} />
+        <Stack.Screen name="signin-email" options={{ headerShown: false, animation: 'none' }} />
+        <Stack.Screen name="address" options={{ headerShown: false }} />
+        <Stack.Screen name="dashboard" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
