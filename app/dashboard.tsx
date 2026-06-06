@@ -36,14 +36,14 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          <View style={styles.gridContainer}>
-            <View style={styles.cardLeft}>
-              <ThemedText style={styles.cardTitle}>燃えるゴミの日</ThemedText>
-              <View style={styles.cardContentRow}>
-                <Ionicons name="flame" size={40} color="#EF4444" style={{ marginTop: 25 }} />
-                <ThemedText style={styles.cardDateText}>明日5/16 (木)</ThemedText>
-              </View>
-            </View>
+       <View style={styles.gridContainer}>
+  <View style={styles.cardLeft}>
+    <ThemedText style={styles.cardTitle}>燃えるゴミの日</ThemedText>
+    <View style={styles.cardContentColumn}>
+      <ThemedText style={styles.cardDateText}>明日5/16 (木)</ThemedText>
+      <Ionicons name="flame" size={38} color="#EF4444" />
+    </View>
+  </View>
 
             <View style={styles.cardRight}>
               <View style={styles.cardHeaderRow}>
@@ -189,6 +189,13 @@ const styles = StyleSheet.create({
   taskTextContainer: {
     flex: 1,
   },
+  cardContentColumn: {
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100%',
+  gap: 8,
+},
   taskTitle: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -215,7 +222,7 @@ const styles = StyleSheet.create({
     height: 140,
     backgroundColor: '#fff',
     borderRadius: 24,
-    padding: 20,
+    padding: 17,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
