@@ -104,7 +104,7 @@ export default function DashboardScreen() {
             <ThemedText style={[styles.tabLabel, styles.tabLabelActive]}>ホーム</ThemedText>
           </Pressable>
 
-          <Pressable style={styles.tabItem} onPress={() => router.push('/calendar')}>
+          <Pressable style={styles.tabItem} onPress={() => router.push('/calender')}>
             <FontAwesome5 name="calendar-alt" size={22} color="#555" />
             <ThemedText style={styles.tabLabel}>ゴミカレンダー</ThemedText>
           </Pressable>
