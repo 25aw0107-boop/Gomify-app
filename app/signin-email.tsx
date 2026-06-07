@@ -3,7 +3,7 @@ import { AntDesign } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View, TextInput, Modal, SafeAreaView } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, TextInput, Modal, SafeAreaView, Linking } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 
@@ -34,6 +34,14 @@ export default function SignInMicrosoftScreen() {
   const handleNext = () => {
     setShowMicrosoftModal(false);
     router.push('/address');
+  };
+
+  const handleForgotEmail = () => {
+    Linking.openURL('https://account.live.com/username/recover');
+  };
+
+  const handleForgotPassword = () => {
+    Linking.openURL('https://account.live.com/ResetPassword.aspx');
   };
 
   return (
@@ -136,8 +144,12 @@ export default function SignInMicrosoftScreen() {
               </Pressable>
             </View>
 
-            <Pressable style={styles.forgotEmail}>
+            <Pressable onPress={handleForgotEmail} style={styles.forgotEmail} hitSlop={8}>
               <ThemedText style={styles.linkText}>Can't access your account?</ThemedText>
+            </Pressable>
+
+            <Pressable onPress={handleForgotPassword} style={styles.forgotPassword} hitSlop={8}>
+              <ThemedText style={styles.linkText}>Forgot password?</ThemedText>
             </Pressable>
 
             <View style={styles.modalFooterRows}>
@@ -314,6 +326,10 @@ const styles = StyleSheet.create({
   },
   forgotEmail: {
     alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  forgotPassword: {
+    alignSelf: 'flex-start',
     marginBottom: 24,
   },
   modalFooterRows: {
@@ -325,7 +341,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: {
-    backgroundColor: '#cccccc',
+    backgroundColor: '#f2f2f2',
+    borderWidth: 1,
+    borderColor: '#cccccc',
     paddingVertical: 6,
     paddingHorizontal: 32,
     minWidth: 100,

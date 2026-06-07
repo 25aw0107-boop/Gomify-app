@@ -3,7 +3,7 @@ import { AntDesign } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View, TextInput, Modal, SafeAreaView } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, TextInput, Modal, SafeAreaView, Linking } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 
@@ -34,6 +34,10 @@ export default function SignInGoogleScreen() {
   const handleNext = () => {
     setShowGoogleModal(false);
     router.push('/address');
+  };
+
+  const handleForgotEmail = () => {
+    Linking.openURL('https://accounts.google.com/signin/v2/usernamerecovery');
   };
 
   return (
@@ -127,7 +131,7 @@ export default function SignInGoogleScreen() {
               keyboardType="email-address"
             />
 
-            <Pressable style={styles.forgotEmail}>
+            <Pressable onPress={handleForgotEmail} style={styles.forgotEmail} hitSlop={12}>
               <ThemedText style={styles.linkText}>Forgot email?</ThemedText>
             </Pressable>
 
