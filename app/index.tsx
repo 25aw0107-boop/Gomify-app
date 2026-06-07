@@ -1,3 +1,4 @@
+
 import { AntDesign, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -5,10 +6,9 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 
-
 export default function HomeScreen() {
   const router = useRouter();
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(false);
   const splashOpacity = useRef(new Animated.Value(1)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslate = useRef(new Animated.Value(20)).current;
@@ -111,7 +111,6 @@ export default function HomeScreen() {
           </ThemedText>
         </Animated.View>
       </Animated.View>
-      
     );
   }
 
@@ -168,15 +167,14 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.signupContainer}>
-          <ThemedText type="default" style={styles.signupText}>
-            Don&apos;t have an account?{' '}
-            <ThemedText type="defaultSemiBold" style={styles.signupLink}>
-              Sign up
-            </ThemedText>
-          </ThemedText>
+        <View style={styles.signupRow}>
+          <ThemedText style={styles.signupText}>Don't have an account? </ThemedText>
+          <Pressable onPress={() => router.push('/signup')} hitSlop={12}>
+            <ThemedText style={styles.signupLink}>Sign up</ThemedText>
+          </Pressable>
+        </View>
       </View>
     </View>
-    
   );
 }
 
@@ -207,7 +205,7 @@ const styles = StyleSheet.create({
   splashLogo: {
     height: 180,
     width: 270,
-    marginTop:20,
+    marginTop: 20,
   },
   formContainer: {
     width: '100%',
@@ -248,15 +246,25 @@ const styles = StyleSheet.create({
   },
   signupContainer: {
     position: 'absolute',
-    bottom: 32,
+    bottom: 52,
     alignItems: 'center',
+    width: '100%',
+  },
+  signupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   signupText: {
     color: '#666666',
     fontSize: 14,
+    lineHeight: 20,
   },
   signupLink: {
     color: '#2563EB',
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
   },
   loadingText: {
     marginTop: 16,
@@ -274,3 +282,4 @@ const styles = StyleSheet.create({
     paddingTop: 80,
   },
 });
+
