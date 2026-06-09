@@ -36,14 +36,14 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-       <View style={styles.gridContainer}>
-  <View style={styles.cardLeft}>
-    <ThemedText style={styles.cardTitle}>燃えるゴミの日</ThemedText>
-    <View style={styles.cardContentColumn}>
-      <ThemedText style={styles.cardDateText}>明日5/16 (木)</ThemedText>
-      <Ionicons name="flame" size={38} color="#EF4444" />
-    </View>
-  </View>
+          <View style={styles.gridContainer}>
+            <View style={styles.cardLeft}>
+              <ThemedText style={styles.cardTitle}>燃えるゴミの日</ThemedText>
+              <View style={styles.cardContentRow}>
+                <Ionicons name="flame" size={35} color="#EF4444" style={{ marginTop: 12 }} />
+                <ThemedText style={styles.cardDateText}>明日5/16 (木)</ThemedText>
+              </View>
+            </View>
 
             <View style={styles.cardRight}>
               <View style={styles.cardHeaderRow}>
@@ -116,13 +116,13 @@ export default function DashboardScreen() {
             <ThemedText style={styles.scanLabel}>ゴミスキャン</ThemedText>
           </View>
 
-          <Pressable style={styles.tabItem} onPress={() => router.push('/reuse')}>
+          <Pressable style={styles.tabItem} onPress={() => router.push('/modal')}>
             <Ionicons name="refresh-circle-outline" size={26} color="#555" />
             <ThemedText style={styles.tabLabel}>リユース</ThemedText>
           </Pressable>
 
-          <Pressable style={styles.tabItem} onPress={() => router.push('/profile')}>
-            <Ionicons name="person" size={22} color="#555" />
+          <Pressable style={styles.tabItem} onPress={() => router.push('/mypage')}>
+            <Ionicons name="refresh-circle-outline" size={26} color="#555" />
             <ThemedText style={styles.tabLabel}>マイページ</ThemedText>
           </Pressable>
         </View>
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
   gap: 8,
 },
   taskTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 4,
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     height: 140,
     backgroundColor: '#fff',
     borderRadius: 24,
-    padding: 17,
+    padding: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
