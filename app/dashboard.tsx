@@ -99,7 +99,7 @@ export default function DashboardScreen() {
         <View style={styles.tabBarBackground} />
         
         <View style={styles.tabBarContent}>
-          <Pressable style={styles.tabItem} onPress={() => router.push('/')}>
+          <Pressable style={styles.tabItem} onPress={() => router.push('/dashboard')}>
             <Octicons name="home" size={24} color="#5B9E00" />
             <ThemedText style={[styles.tabLabel, styles.tabLabelActive]}>ホーム</ThemedText>
           </Pressable>
