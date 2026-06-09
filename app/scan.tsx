@@ -1,15 +1,41 @@
-
 import { ThemedText } from '@/components/themed-text';
-import { AntDesign, Ionicons, MaterialCommunityIcons, Octicons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { FontAwesome5, Ionicons, Octicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, View, TextInput, Image } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
+import { Alert, Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 export default function ScanScreen() {
   const router = useRouter();
 
+
+  const startCamera = async () => {
+
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (permissionResult.granted === false) {
+      Alert.alert("Kameraåtkomst krävs", "Du måste tillåta appen att använda kameran för att kunna skanna.");
+      return;
+    }
+
+  
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true, 
+      aspect: [1, 1],      
+      quality: 0.8,      
+    });
+
+    if (!result.canceled) {
+      const imageUri = result.assets[0].uri;
+      console.log('Här är din bild-URI:', imageUri);
+      
+    }
+  };
+
   return (
     <View style={styles.mainWrapper}>
+      <Tabs.Screen options={{ headerShown: false }} />
+
       <LinearGradient
         colors={['#DCE8D3', '#FFFFFF']}
         style={styles.gradientBackground}
@@ -63,7 +89,8 @@ export default function ScanScreen() {
               すぐに確認できます
             </ThemedText>
             
-            <Pressable style={styles.bigScanButton} onPress={() => console.log('Kamera startad')}>
+          
+            <Pressable style={styles.bigScanButton} onPress={startCamera}>
               <Ionicons name="camera-outline" size={32} color="#fff" />
               <ThemedText style={styles.bigScanButtonText}>スキャン開始</ThemedText>
             </Pressable>
@@ -142,7 +169,7 @@ export default function ScanScreen() {
           </Pressable>
 
           <Pressable style={styles.tabItem} onPress={() => router.push('/mypage')}>
-            <Ionicons name="refresh-circle-outline" size={26} color="#555" />
+            <Ionicons name="person-outline" size={24} color="#555" />
             <ThemedText style={styles.tabLabel}>マイページ</ThemedText>
           </Pressable>
         </View>
@@ -164,8 +191,8 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   headerContainer: {
-    paddingTop: 24,
-    height: 70,
+    paddingTop: 54,
+    height: 100,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -176,12 +203,15 @@ const styles = StyleSheet.create({
   backButton: {
     position: 'absolute',
     left: 16,
-    padding: 8,
+    padding: 18,
     zIndex: 10,
+    marginTop:95,
   },
   headerRow: {
     flexDirection: 'row',
-    gap: 28,
+    gap: 18,
+    marginTop: 40,
+    height:200,
   },
   headerItem: {
     flexDirection: 'row',
@@ -195,28 +225,30 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    paddingTop: 10,
+    paddingTop: 40,
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    marginHorizontal: 24,
-    marginBottom: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3, 
-  },
+ card: {
+  backgroundColor: '#ffffff', 
+  borderRadius: 20,
+  marginHorizontal: 24,
+  marginBottom: 16,
+  padding: 20,
+  shadowColor: '#000000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.20, 
+  shadowRadius: 6,
+  elevation: 4, 
+  borderWidth: 1,
+  borderColor: 'rgba(255, 255, 255, 0.5)', 
+},
   introRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 15,
   },
   introImage: {
-    width: 75,
-    height: 75,
+    width: 120,
+    height: 120,
     resizeMode: 'contain',
   },
   introTextContainer: {
