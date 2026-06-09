@@ -1,10 +1,10 @@
 
+import { ThemedText } from '@/components/themed-text';
 import { AntDesign, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter, Stack } from 'expo-router'; // Importera Stack här
+import { Stack, useRouter } from 'expo-router'; // Importera Stack här
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
-import { ThemedText } from '@/components/themed-text';
 
 export default function HomeScreen() {
   const router = useRouter();

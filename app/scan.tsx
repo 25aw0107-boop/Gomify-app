@@ -7,10 +7,8 @@ import { Alert, Image, Pressable, StyleSheet, TextInput, View } from 'react-nati
 
 export default function ScanScreen() {
   const router = useRouter();
-
-
+  
   const startCamera = async () => {
-
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
 
     if (permissionResult.granted === false) {
@@ -18,17 +16,59 @@ export default function ScanScreen() {
       return;
     }
 
-  
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true, 
       aspect: [1, 1],      
-      quality: 0.8,      
+      quality: 0.5, 
     });
 
     if (!result.canceled) {
       const imageUri = result.assets[0].uri;
-      console.log('Här är din bild-URI:', imageUri);
+      console.log('Bild sparad lokalt på:', imageUri);
       
+      // Laddningsruta för användaren
+      Alert.alert("スキャン中...", "AIがゴミを分析しています...", [], { cancelable: false });
+
+      try {
+        const formData = new FormData();
+        formData.append('image', {
+          uri: imageUri,
+          type: 'image/jpeg',
+          name: 'scan.jpg',
+        } as any);
+
+        const response = await fetch('https://din-api-url.com/api/scan', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          Alert.alert(
+            `分析結果: ${data.itemName}`, 
+            `分別方法: ${data.category}\n\n${data.instructions}`, 
+            [{ text: "OK", onPress: () => console.log("Skanning klar!") }]
+          );
+        } else {
+          Alert.alert("エラー", "アイテムを識別できませんでした。もう一度試してください。");
+        }
+
+      } catch (error) {
+        console.error("Scanning misslyckades:", error);
+        
+        // Simulerat testsvar (eftersom din riktiga API-länk inte är live än)
+        setTimeout(() => {
+          Alert.alert(
+            "分析結果: ペットボトル (Plastflaska)",
+            "カテゴリー: 資源ゴミ (Återvinningsbart)\n\n捨て方: 中を軽くすすぎ、ラベルとキャップを外して専用の回収箱に出してください。",
+            [{ text: "確認しました" }]
+          );
+        }, 1500);
+      }
     }
   };
 
@@ -40,7 +80,7 @@ export default function ScanScreen() {
         colors={['#DCE8D3', '#FFFFFF']}
         style={styles.gradientBackground}
         start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 0.12 }}
+        end={{ x: 0.5, y: 0.42 }}
       />
 
       <View style={styles.headerContainer}>
@@ -71,7 +111,7 @@ export default function ScanScreen() {
             <View style={styles.introTextContainer}>
               <ThemedText style={styles.introTitle}>これは何ゴミ？</ThemedText>
               <ThemedText style={styles.introDescription}>
-                Gomifyですぐ解決。{"\n"}
+                Gomifyesですぐ解決。{"\n"}
                 スキャンまたは検索で、{"\n"}
                 正しい分別方法を確認できます。
               </ThemedText>
@@ -84,12 +124,9 @@ export default function ScanScreen() {
           
           <View style={styles.scanActionRow}>
             <ThemedText style={styles.scanInstruction}>
-              カメラでアイテムを読み取る{"\n"}
-              と、ゴミの種類や捨て方を{"\n"}
-              すぐに確認できます
+              カメラでアイテムを読み取ると、ゴミの種類や捨て方をすぐに確認できます
             </ThemedText>
             
-          
             <Pressable style={styles.bigScanButton} onPress={startCamera}>
               <Ionicons name="camera-outline" size={32} color="#fff" />
               <ThemedText style={styles.bigScanButtonText}>スキャン開始</ThemedText>
@@ -163,13 +200,13 @@ export default function ScanScreen() {
             <ThemedText style={[styles.scanLabel, styles.tabLabelActive]}>ゴミスキャン</ThemedText>
           </View>
 
-          <Pressable style={styles.tabItem} onPress={() => router.push('/modal')}>
+          <Pressable style={styles.tabItem} onPress={() => router.push('/reuse')}>
             <Ionicons name="refresh-circle-outline" size={26} color="#555" />
             <ThemedText style={styles.tabLabel}>リユース</ThemedText>
           </Pressable>
 
-          <Pressable style={styles.tabItem} onPress={() => router.push('/mypage')}>
-            <Ionicons name="person-outline" size={24} color="#555" />
+          <Pressable style={styles.tabItem} onPress={() => router.push('/profile')}>
+            <Ionicons name="person" size={22} color="#555" />
             <ThemedText style={styles.tabLabel}>マイページ</ThemedText>
           </Pressable>
         </View>
@@ -227,41 +264,42 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 40,
   },
- card: {
-  backgroundColor: '#ffffff', 
-  borderRadius: 20,
-  marginHorizontal: 24,
-  marginBottom: 16,
-  padding: 20,
-  shadowColor: '#000000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.20, 
-  shadowRadius: 6,
-  elevation: 4, 
-  borderWidth: 1,
-  borderColor: 'rgba(255, 255, 255, 0.5)', 
-},
+  card: {
+    backgroundColor: '#ffffff', 
+    borderRadius: 20,
+    marginHorizontal: 24,
+    marginBottom: 24, // Ger bra space mellan korten nu!
+    padding: 18,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.20, 
+    shadowRadius: 6,
+    elevation: 4, 
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)', 
+  },
   introRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 15,
   },
   introImage: {
-    width: 120,
-    height: 120,
+    width: 110,
+    height: 110,
     resizeMode: 'contain',
   },
   introTextContainer: {
     flex: 1,
   },
   introTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 4,
   },
   introDescription: {
-    fontSize: 13,
+    fontSize: 14,
+    margin:7,
     color: '#333',
     lineHeight: 18,
   },
@@ -281,14 +319,14 @@ const styles = StyleSheet.create({
   scanActionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 12,
   },
   scanInstruction: {
+    maxWidth: '60%',
     fontSize: 13,
     color: '#333',
-    lineHeight: 20,
-    flex: 1,
+    lineHeight: 18,
+    flex: 2,
   },
   bigScanButton: {
     width: 90,
@@ -297,6 +335,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#76C800',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation:5,
+    marginRight: 15,  
+    marginTop: -20, // Knappen lyfts upp lite och närmare texten
   },
   bigScanButtonText: {
     color: '#fff',
@@ -326,7 +371,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   stepText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#333',
     textAlign: 'center',
     lineHeight: 13,
@@ -334,6 +379,7 @@ const styles = StyleSheet.create({
   },
   stepArrow: {
     marginBottom: 34,
+    color: '#333',
     marginHorizontal: 2,
   },
   searchBarContainer: {
@@ -368,7 +414,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
-
   tabBarContainer: {
     position: 'absolute',
     bottom: 0,

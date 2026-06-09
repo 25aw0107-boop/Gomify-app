@@ -1,8 +1,8 @@
 
 import { ThemedText } from '@/components/themed-text';
-import { AntDesign, Ionicons, MaterialCommunityIcons, Octicons, FontAwesome5 } from '@expo/vector-icons';
+import { AntDesign, FontAwesome5, Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View, ImageBackground, ScrollView } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 export default function DashboardScreen() {
   const router = useRouter();
