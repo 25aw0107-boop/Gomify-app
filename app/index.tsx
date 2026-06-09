@@ -1,3 +1,4 @@
+
 import { AntDesign, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter, Stack } from 'expo-router'; // Importera Stack här
