@@ -7,8 +7,7 @@ import { Alert, Image, Pressable, StyleSheet, TextInput, View } from 'react-nati
 
 export default function ScanScreen() {
   const router = useRouter();
-
-  // HÄR ÄR DEN NYA SMARTA FUNKTIONEN INLAGD!
+  
   const startCamera = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
 
