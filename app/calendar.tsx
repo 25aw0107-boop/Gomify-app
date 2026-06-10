@@ -111,7 +111,7 @@ export default function CalendarScreen() {
 
                 {/* 3. 颜色分类对照说明栏（Legend） */}
                 <View style={styles.legendContainer}>
-                    <ThemedText style={styles.legendSectionTitle}>分类规则参考</ThemedText>
+                    <ThemedText style={styles.legendSectionTitle}>分類ルールの参考</ThemedText>
 
                     <View style={styles.legendItem}>
                         <View style={[styles.legendColorBox, { backgroundColor: GARBAGE_TYPES.BURNABLE.color }]} />

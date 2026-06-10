@@ -258,7 +258,7 @@ export default function MyPage() {
           <View style={styles.tabBarBackground} />
 
           <View style={styles.tabBarContent}>
-            <Pressable style={styles.tabItem} onPress={() => router.push('/')}>
+            <Pressable style={styles.tabItem} onPress={() => router.push('/dashboard')}>
               <Octicons name="home" size={24} color="#555" />
               <ThemedText style={styles.tabLabel}>ホーム</ThemedText>
             </Pressable>
