@@ -1,14 +1,13 @@
-
 import { ThemedText } from '@/components/themed-text';
 import { AntDesign, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Stack, useRouter } from 'expo-router'; // Importera Stack här
+import { Stack, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [showSplash, setShowSplash] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   const splashOpacity = useRef(new Animated.Value(1)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslate = useRef(new Animated.Value(20)).current;
@@ -57,7 +56,7 @@ export default function HomeScreen() {
     const timeout = setTimeout(() => {
       Animated.timing(splashOpacity, {
         toValue: 0,
-        duration: 500,
+        duration: 600,
         useNativeDriver: true,
       }).start(() => {
         swayAnimation.stop();
@@ -71,52 +70,8 @@ export default function HomeScreen() {
     };
   }, [contentOpacity, contentTranslate, splashOpacity, sway]);
 
-  if (showSplash) {
-    return (
-      <Animated.View style={[styles.splashScreen, { opacity: splashOpacity }]}> 
-        <Animated.View
-          style={{
-            alignItems: 'center',
-            opacity: contentOpacity,
-            transform: [{ translateY: contentTranslate }],
-          }}
-        >
-          <Animated.View
-            style={{
-              transform: [
-                {
-                  translateX: sway.interpolate({
-                    inputRange: [-1, 0, 1],
-                    outputRange: [-24, 0, 24],
-                  }),
-                },
-                {
-                  rotate: sway.interpolate({
-                    inputRange: [-1, 0, 1],
-                    outputRange: ['-8deg', '0deg', '8deg'],
-                  }),
-                },
-              ],
-            }}
-          >
-            <Image
-              source={require('@/assets/images/Go Green Recycle Container.png')}
-              style={styles.splashLogo}
-              contentFit="contain"
-            />
-          </Animated.View>
-          <ActivityIndicator size="large" color="#20bc5e" style={styles.loadingSpinner} />
-          <ThemedText type="default" style={styles.loadingText}>
-            Loading...
-          </ThemedText>
-        </Animated.View>
-      </Animated.View>
-    );
-  }
-
   return (
     <View style={styles.screen}>
-      {/* Denna rad döljer den inbyggda menyraden där det stod "index" */}
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.headerImageContainer}>
@@ -177,6 +132,47 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
+
+      {showSplash && (
+        <Animated.View style={[styles.splashScreen, { opacity: splashOpacity }]}> 
+          <Animated.View
+            style={{
+              alignItems: 'center',
+              opacity: contentOpacity,
+              transform: [{ translateY: contentTranslate }],
+            }}
+          >
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    translateX: sway.interpolate({
+                      inputRange: [-1, 0, 1],
+                      outputRange: [-24, 0, 24],
+                    }),
+                  },
+                  {
+                    rotate: sway.interpolate({
+                      inputRange: [-1, 0, 1],
+                      outputRange: ['-8deg', '0deg', '8deg'],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <Image
+                source={require('@/assets/images/Go Green Recycle Container.png')}
+                style={styles.splashLogo}
+                contentFit="contain"
+              />
+            </Animated.View>
+            <ActivityIndicator size="large" color="#20bc5e" style={styles.loadingSpinner} />
+            <ThemedText type="default" style={styles.loadingText}>
+              Loading...
+            </ThemedText>
+          </Animated.View>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -278,11 +274,14 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   splashScreen: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 80,
   },
 });
-
