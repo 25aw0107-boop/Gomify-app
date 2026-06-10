@@ -38,7 +38,7 @@ export default function ReuseScreen() {
         );
     };
 
-    // 新增：处理卖家删除自己出品物资的逻辑
+    // 处理卖家删除自己出品物资的逻辑
     const handleDeleteProduct = (id: string, title: string) => {
         Alert.alert(
             "出品削除",
@@ -70,7 +70,8 @@ export default function ReuseScreen() {
         }
     };
 
-    const renderProductItem = ({ item }: { item: typeof items[0] }) => (
+    // 修复点：显式将类型指定为 any，消除 TypeScript 对混合数据源的推断红线
+    const renderProductItem = ({ item }: { item: any }) => (
         <Pressable style={styles.itemCard} onPress={() => router.push(`/reuse/${item.id}`)}>
             <View style={styles.imageContainer}>
                 <View style={styles.imagePlaceholder}>
@@ -111,7 +112,8 @@ export default function ReuseScreen() {
         </Pressable>
     );
 
-    const renderMessageItem = ({ item }: { item: typeof messageItems[0] }) => (
+    // 修复点：同样将类型显式指定为 any，防止多 Tab 数据冲突引发红线
+    const renderMessageItem = ({ item }: { item: any }) => (
         <Pressable style={styles.messageCard} onPress={() => router.push(`/messages/${item.id}`)}>
             <View style={styles.avatarContainer}>
                 <Ionicons name="person-outline" size={32} color="#aaa" />
@@ -163,7 +165,7 @@ export default function ReuseScreen() {
 
             {/* 动态列表内容 */}
             <FlatList
-                data={getFilteredData() as any}
+                data={getFilteredData()}
                 renderItem={activeTab === 'messages' ? renderMessageItem : renderProductItem}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContainer}
@@ -175,7 +177,6 @@ export default function ReuseScreen() {
                         </View>
                     ) : null
                 }
-                // 在发现页或者商品相关页面底部加入原先的中间悬浮“出品する”按钮样式
                 ListFooterComponent={
                     activeTab !== 'messages' ? (
                         <Pressable style={styles.centerListingButton} onPress={() => router.push('/reuse/create')}>
@@ -214,7 +215,7 @@ export default function ReuseScreen() {
                         <ThemedText style={[styles.tabLabelBottom, styles.tabLabelBottomActive]}>リユース</ThemedText>
                     </Pressable>
 
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/profile')}>
+                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/mypage')}>
                         <Ionicons name="person" size={22} color="#555" />
                         <ThemedText style={styles.tabLabelBottom}>マイページ</ThemedText>
                     </Pressable>
@@ -274,7 +275,7 @@ const styles = StyleSheet.create({
     },
     listContainer: {
         padding: 16,
-        paddingBottom: 120, // 留出底部菜单栏的富余空间
+        paddingBottom: 120,
     },
     itemCard: {
         backgroundColor: '#FFF',
@@ -322,7 +323,6 @@ const styles = StyleSheet.create({
     rightHeartButton: {
         padding: 12,
     },
-    // ---- 新增的右侧删除图标按钮样式 ----
     rightDeleteButton: {
         width: 44,
         height: 44,
@@ -332,9 +332,8 @@ const styles = StyleSheet.create({
         marginRight: 4,
     },
     deleteButtonPressed: {
-        backgroundColor: '#FFEBEB', // 点击时产生的轻微红底反馈
+        backgroundColor: '#FFEBEB',
     },
-    // 内嵌的中间出品按钮
     centerListingButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -353,7 +352,6 @@ const styles = StyleSheet.create({
         color: '#444',
         marginLeft: 6,
     },
-    // 消息样式
     messageHeaderTitleRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -422,7 +420,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    // ---- 底部通用五个导航栏菜单样式 ----
     tabBarContainer: {
         position: 'absolute',
         bottom: 0,

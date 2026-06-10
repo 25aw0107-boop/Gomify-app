@@ -1,8 +1,8 @@
 
 import { ThemedText } from '@/components/themed-text';
-import { AntDesign, Ionicons, MaterialCommunityIcons, Octicons, FontAwesome5 } from '@expo/vector-icons';
+import { AntDesign, FontAwesome5, Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View, ImageBackground, ScrollView } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -104,7 +104,7 @@ export default function DashboardScreen() {
             <ThemedText style={[styles.tabLabel, styles.tabLabelActive]}>ホーム</ThemedText>
           </Pressable>
 
-          <Pressable style={styles.tabItem} onPress={() => router.push('/calender')}>
+          <Pressable style={styles.tabItem} onPress={() => router.push('/calendar')}>
             <FontAwesome5 name="calendar-alt" size={22} color="#555" />
             <ThemedText style={styles.tabLabel}>ゴミカレンダー</ThemedText>
           </Pressable>
@@ -121,7 +121,7 @@ export default function DashboardScreen() {
             <ThemedText style={styles.tabLabel}>リユース</ThemedText>
           </Pressable>
 
-          <Pressable style={styles.tabItem} onPress={() => router.push('/profile')}>
+          <Pressable style={styles.tabItem} onPress={() => router.push('/mypage')}>
             <Ionicons name="person" size={22} color="#555" />
             <ThemedText style={styles.tabLabel}>マイページ</ThemedText>
           </Pressable>

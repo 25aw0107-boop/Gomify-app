@@ -17,7 +17,7 @@ export default function MyPage() {
 
   const [selectedDesign, setSelectedDesign] = useState('natural');
   const [points, setPoints] = useState(10);
-  
+
   const maxPoints = 30;
   const pointsPercent = (points / maxPoints) * 100;
 
@@ -47,39 +47,39 @@ export default function MyPage() {
   };
 
   const menuItems = [
-    { 
-      id: 'about', 
-      icon: 'information', 
-      label: 'Gomifyについて', 
-      title: 'Gomifyについて', 
-      content: 'Gomify（ゴミファイ）は、一人暮らしを始めたばかりの方や、日本にて交わるゴミの分別法に困っている、ユーザーの皆さまが一番困っている「ゴミ出し」をサポートするアプリです。' 
+    {
+      id: 'about',
+      icon: 'information',
+      label: 'Gomifyについて',
+      title: 'Gomifyについて',
+      content: 'Gomify（ゴミファイ）は、一人暮らしを始めたばかりの方や、日本にて交わるゴミの分別法に困っている、ユーザーの皆さまが一番困っている「ゴミ出し」をサポートするアプリです。'
     },
-    { 
-      id: 'help', 
-      icon: 'help-circle', 
-      label: 'ヘルプ・お問合せ', 
-      title: 'ヘルプ・お問合せ', 
-      content: 'Gomifyのご利用でご不明な点や、ご質問がございましたら、お気軽にお問い合わせください。' 
+    {
+      id: 'help',
+      icon: 'help-circle',
+      label: 'ヘルプ・お問合せ',
+      title: 'ヘルプ・お問合せ',
+      content: 'Gomifyのご利用でご不明な点や、ご質問がございましたら、お気軽にお問い合わせください。'
     },
-    { 
-      id: 'report', 
-      icon: 'flag', 
-      label: '問題を報告する', 
-      title: '問題を報告する', 
-      content: 'Gomifyをご利用いただきありがとうございます。アプリの不具合、データの問題についてお報告ください。' 
+    {
+      id: 'report',
+      icon: 'flag',
+      label: '問題を報告する',
+      title: '問題を報告する',
+      content: 'Gomifyをご利用いただきありがとうございます。アプリの不具合、データの問題についてお報告ください。'
     },
-    { 
-      id: 'logout', 
-      icon: 'logout', 
-      label: 'ログアウト', 
-      title: 'ログアウト', 
-      content: 'ログアウトしますか？' 
+    {
+      id: 'logout',
+      icon: 'logout',
+      label: 'ログアウト',
+      title: 'ログアウト',
+      content: 'ログアウトしますか？'
     }
   ];
 
   const handleLogout = () => {
     Alert.alert('ログアウト', 'ログアウトしてもよろしいですか？', [
-      { text: 'キャンセル', onPress: () => {} },
+      { text: 'キャンセル', onPress: () => { } },
       { text: 'ログアウト', onPress: () => router.push('/') }
     ]);
   };
@@ -88,7 +88,7 @@ export default function MyPage() {
     <View style={styles.mainWrapper}>
       <View style={styles.container}>
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          
+
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.userInfo}>
@@ -131,7 +131,7 @@ export default function MyPage() {
 
             {/* Design Section */}
             <View style={styles.expandableContainer}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.expandBtn}
                 onPress={() => toggleSection('design')}
               >
@@ -141,10 +141,10 @@ export default function MyPage() {
                     <ThemedText type="defaultSemiBold" style={styles.expandBtnLabel}>デザインを変える</ThemedText>
                     <ThemedText type="default" style={styles.expandBtnSubtext}>アプリのデザインをカスタマイズできます</ThemedText>
                   </View>
-                  <MaterialCommunityIcons 
-                    name={expandedSections.design ? 'chevron-up' : 'chevron-down'} 
-                    size={20} 
-                    color="#666" 
+                  <MaterialCommunityIcons
+                    name={expandedSections.design ? 'chevron-up' : 'chevron-down'}
+                    size={20}
+                    color="#666"
                   />
                 </View>
               </TouchableOpacity>
@@ -152,7 +152,7 @@ export default function MyPage() {
               {expandedSections.design && (
                 <View style={styles.expandedContent}>
                   {designModes.map((mode) => (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       key={mode.id}
                       style={[
                         styles.designOption,
@@ -181,7 +181,7 @@ export default function MyPage() {
 
             {/* Display Section */}
             <View style={styles.expandableContainer}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.expandBtn}
                 onPress={() => toggleSection('display')}
               >
@@ -191,10 +191,10 @@ export default function MyPage() {
                     <ThemedText type="defaultSemiBold" style={styles.expandBtnLabel}>出品を優先表示にする</ThemedText>
                     <ThemedText type="default" style={styles.expandBtnSubtext}>出品をもっと多くの人に見せできます</ThemedText>
                   </View>
-                  <MaterialCommunityIcons 
-                    name={expandedSections.display ? 'chevron-up' : 'chevron-down'} 
-                    size={20} 
-                    color="#666" 
+                  <MaterialCommunityIcons
+                    name={expandedSections.display ? 'chevron-up' : 'chevron-down'}
+                    size={20}
+                    color="#666"
                   />
                 </View>
               </TouchableOpacity>
@@ -214,7 +214,7 @@ export default function MyPage() {
           <View style={styles.card}>
             {menuItems.map((item, idx) => (
               <View key={item.id}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
                     styles.menuBtn,
                     idx !== menuItems.length - 1 && styles.menuBtnBorder
@@ -230,10 +230,10 @@ export default function MyPage() {
                   <MaterialCommunityIcons name={item.icon as any} size={20} color="#333" />
                   <ThemedText type="default" style={styles.menuLabel}>{item.label}</ThemedText>
                   {item.id !== 'logout' && (
-                    <MaterialCommunityIcons 
-                      name={expandedSections[item.id] ? 'chevron-up' : 'chevron-right'} 
-                      size={16} 
-                      color="#999" 
+                    <MaterialCommunityIcons
+                      name={expandedSections[item.id] ? 'chevron-up' : 'chevron-right'}
+                      size={16}
+                      color="#999"
                     />
                   )}
                 </TouchableOpacity>
@@ -256,7 +256,7 @@ export default function MyPage() {
         <View style={styles.tabBarContainer}>
           <View style={styles.scanBackgroundCircle} />
           <View style={styles.tabBarBackground} />
-          
+
           <View style={styles.tabBarContent}>
             <Pressable style={styles.tabItem} onPress={() => router.push('/')}>
               <Octicons name="home" size={24} color="#555" />
@@ -275,8 +275,8 @@ export default function MyPage() {
               <ThemedText style={styles.scanLabel}>ゴミスキャン</ThemedText>
             </View>
 
-            <Pressable style={styles.tabItem} onPress={() => router.push('/modal')}>
-              <MaterialCommunityIcons name="sofa-outline" size={26} color="#555" />
+            <Pressable style={styles.tabItem} onPress={() => router.push('/reuse')}>
+              <Ionicons name="refresh-circle-outline" size={26} color="#555" />
               <ThemedText style={styles.tabLabel}>リユース</ThemedText>
             </Pressable>
 
