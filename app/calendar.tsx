@@ -159,7 +159,7 @@ export default function CalendarScreen() {
                         <ThemedText style={styles.tabLabelBottom}>リユース</ThemedText>
                     </Pressable>
 
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/profile')}>
+                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/mypage')}>
                         <Ionicons name="person" size={22} color="#555" />
                         <ThemedText style={styles.tabLabelBottom}>マイページ</ThemedText>
                     </Pressable>

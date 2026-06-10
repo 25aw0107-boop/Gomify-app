@@ -340,7 +340,7 @@ export default function ScanScreen() {
             <ThemedText style={styles.tabLabel}>ホーム</ThemedText>
           </Pressable>
 
-          <Pressable style={styles.tabItem} onPress={() => router.push('/calender')}>
+          <Pressable style={styles.tabItem} onPress={() => router.push('/calendar')}>
             <FontAwesome5 name="calendar-alt" size={22} color="#555" />
             <ThemedText style={styles.tabLabel}>ゴミカレンダー</ThemedText>
           </Pressable>
@@ -352,7 +352,7 @@ export default function ScanScreen() {
             <ThemedText style={[styles.scanLabel, styles.tabLabelActive]}>ゴミスキャン</ThemedText>
           </View>
 
-          <Pressable style={styles.tabItem} onPress={() => router.push('/modal')}>
+          <Pressable style={styles.tabItem} onPress={() => router.push('/reuse')}>
             <Ionicons name="refresh-circle-outline" size={26} color="#555" />
             <ThemedText style={styles.tabLabel}>リユース</ThemedText>
           </Pressable>
