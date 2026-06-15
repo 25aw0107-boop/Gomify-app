@@ -1,8 +1,9 @@
 import { ThemedText } from '@/components/themed-text'; // ✨ Dashboard နဲ့ လမ်းကြောင်းတူအောင် ညှိလိုက်ပါတယ်
 import { FontAwesome5, Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 export default function MyPage() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function MyPage() {
 
   const [selectedDesign, setSelectedDesign] = useState('natural');
   const [points, setPoints] = useState(10);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   const maxPoints = 30;
   const pointsPercent = (points / maxPoints) * 100;
@@ -26,6 +28,26 @@ export default function MyPage() {
       ...prev,
       [section]: !prev[section]
     }));
+  };
+
+  const pickImage = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (permissionResult.granted === false) {
+      Alert.alert('ခွင့်ပြုချက်လိုအပ်သည်', 'ဓာတ်ပုံရွေးချယ်နိုင်ရန် Gallery ဖွင့်ခွင့်ပေးဖို့ လိုအပ်ပါတယ်');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setProfileImage(result.assets[0].uri);
+    }
   };
 
   const designModes = [
@@ -92,9 +114,21 @@ export default function MyPage() {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.userInfo}>
-              <View style={styles.avatar}>
-                <MaterialCommunityIcons name="account-circle" size={48} color="#999" />
+              
+              {/* Profile Image Wrapper with Camera Badge */}
+              <View style={styles.avatarWrapper}>
+                <TouchableOpacity style={styles.avatar} onPress={pickImage} activeOpacity={0.7}>
+                  {profileImage ? (
+                    <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+                  ) : (
+                    <MaterialCommunityIcons name="account-circle" size={48} color="#999" />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cameraIconBadge} onPress={pickImage} activeOpacity={0.8}>
+                  <Ionicons name="camera" size={14} color="#5B9E00" />
+                </TouchableOpacity>
               </View>
+
               <View style={styles.userDetails}>
                 <ThemedText type="default" style={styles.userName}>ユーザー名</ThemedText>
                 <ThemedText type="default" style={styles.userLocation}>📍 東京都 渋谷区</ThemedText>
@@ -291,14 +325,52 @@ export default function MyPage() {
   );
 }
 
-// Styles are kept identical to yours
 const styles = StyleSheet.create({
   mainWrapper: { flex: 1, backgroundColor: '#F5F5F5' },
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   scrollView: { flex: 1 },
   header: { backgroundColor: '#fff', paddingHorizontal: 16, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
   userInfo: { flexDirection: 'row', gap: 12, marginBottom: 16, alignItems: 'flex-start' },
-  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
+  
+  // Avatar Styles Fixed
+  avatarWrapper: {
+    position: 'relative',
+    width: 56,
+    height: 56,
+  },
+  avatar: { 
+    width: '100%', 
+    height: '100%', 
+    borderRadius: 28, 
+    backgroundColor: '#f0f0f0', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    overflow: 'hidden' 
+  },
+  avatarImage: { 
+    width: '100%', 
+    height: '100%', 
+    borderRadius: 28 
+  },
+  cameraIconBadge: { 
+    position: 'absolute', 
+    bottom: -4,
+    right: -4,
+    backgroundColor: '#FFFFFF', 
+    width: 24, 
+    height: 24, 
+    borderRadius: 12, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+    elevation: 2,
+  },
+
   userDetails: { flex: 1 },
   userName: { fontSize: 16, fontWeight: '500', color: '#333', marginBottom: 4 },
   userLocation: { fontSize: 13, color: '#999' },
