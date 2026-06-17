@@ -1,9 +1,10 @@
-import { ThemedText } from '@/components/themed-text'; // ✨ Dashboard နဲ့ လမ်းကြောင်းတူအောင် ညှိလိုက်ပါတယ်
+import { ThemedText } from '@/components/themed-text';
 import { FontAwesome5, Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { supabase } from '@/lib/supabase'; // 🔐 引入 Supabase 客户端
 
 export default function MyPage() {
   const router = useRouter();
@@ -32,9 +33,9 @@ export default function MyPage() {
 
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
+
     if (permissionResult.granted === false) {
-      Alert.alert('ခွင့်ပြုချက်လိုအပ်သည်', 'ဓာတ်ပုံရွေးချယ်နိုင်ရန် Gallery ဖွင့်ခွင့်ပေးဖို့ လိုအပ်ပါတယ်');
+      Alert.alert('許可が必要', 'ギャラリーにアクセスする権限が必要です');
       return;
     }
 
@@ -71,51 +72,69 @@ export default function MyPage() {
   const menuItems = [
     {
       id: 'about',
-      icon: 'information',
+      icon: 'information' as const,
       label: 'Gomifyについて',
       title: 'Gomifyについて',
       content: 'Gomify（ゴミファイ）は、一人暮らしを始めたばかりの方や、日本にて交わるゴミの分別法に困っている、ユーザーの皆さまが一番困っている「ゴミ出し」をサポートするアプリです。'
     },
     {
       id: 'help',
-      icon: 'help-circle',
+      icon: 'help-circle' as const,
       label: 'ヘルプ・お問合せ',
       title: 'ヘルプ・お問合せ',
       content: 'Gomifyのご利用でご不明な点や、ご質問がございましたら、お気軽にお問い合わせください。'
     },
     {
       id: 'report',
-      icon: 'flag',
+      icon: 'flag' as const,
       label: '問題を報告する',
       title: '問題を報告する',
       content: 'Gomifyをご利用いただきありがとうございます。アプリの不具合、データの問題についてお報告ください。'
     },
     {
       id: 'logout',
-      icon: 'logout',
+      icon: 'logout' as const,
       label: 'ログアウト',
       title: 'ログアウト',
       content: 'ログアウトしますか？'
     }
   ];
 
+  // 🔐 真实登出处理函数
   const handleLogout = () => {
     Alert.alert('ログアウト', 'ログアウトしてもよろしいですか？', [
-      { text: 'キャンセル', onPress: () => { } },
-      { text: 'ログアウト', onPress: () => router.push('/') }
+      { text: 'キャンセル', onPress: () => { }, style: 'cancel' },
+      {
+        text: 'ログアウト',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const { error } = await supabase.auth.signOut(); // 物理清理 Token 缓存
+            if (error) {
+              Alert.alert('エラー', 'ログアウトに失敗しました: ' + error.message);
+            }
+          } catch (err) {
+            Alert.alert('エラー', '予期せぬエラーが発生しました');
+          }
+        }
+      }
     ]);
   };
 
   return (
     <View style={styles.mainWrapper}>
+      <Stack.Screen options={{ headerShown: false }} />
+
       <View style={styles.container}>
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent} // 👈 绑定更新后的样式
+        >
 
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.userInfo}>
-              
-              {/* Profile Image Wrapper with Camera Badge */}
               <View style={styles.avatarWrapper}>
                 <TouchableOpacity style={styles.avatar} onPress={pickImage} activeOpacity={0.7}>
                   {profileImage ? (
@@ -134,7 +153,7 @@ export default function MyPage() {
                 <ThemedText type="default" style={styles.userLocation}>📍 東京都 渋谷区</ThemedText>
               </View>
             </View>
-            <TouchableOpacity style={styles.profileBtn}>
+            <TouchableOpacity style={styles.profileBtn} activeOpacity={0.7}>
               <ThemedText type="default" style={styles.profileBtnText}>プロフィール設定</ThemedText>
             </TouchableOpacity>
           </View>
@@ -168,6 +187,7 @@ export default function MyPage() {
               <TouchableOpacity
                 style={styles.expandBtn}
                 onPress={() => toggleSection('design')}
+                activeOpacity={0.7}
               >
                 <View style={styles.expandBtnContent}>
                   <ThemedText type="default" style={styles.sectionIcon}>🎨</ThemedText>
@@ -197,6 +217,7 @@ export default function MyPage() {
                           spendPoints(mode.cost, mode.id);
                         }
                       }}
+                      activeOpacity={0.7}
                     >
                       <ThemedText type="default" style={styles.designOptionIcon}>{mode.icon}</ThemedText>
                       <ThemedText type="default" style={styles.designOptionName}>{mode.name}</ThemedText>
@@ -218,6 +239,7 @@ export default function MyPage() {
               <TouchableOpacity
                 style={styles.expandBtn}
                 onPress={() => toggleSection('display')}
+                activeOpacity={0.7}
               >
                 <View style={styles.expandBtnContent}>
                   <ThemedText type="default" style={styles.sectionIcon}>⭐</ThemedText>
@@ -236,7 +258,7 @@ export default function MyPage() {
               {expandedSections.display && (
                 <View style={styles.expandedContent}>
                   <ThemedText type="default" style={styles.displayText}>5ポイント解放できます</ThemedText>
-                  <TouchableOpacity style={styles.secondaryBtn}>
+                  <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.7}>
                     <ThemedText type="defaultSemiBold" style={styles.secondaryBtnText}>この出品に5ポイント使う</ThemedText>
                   </TouchableOpacity>
                 </View>
@@ -253,16 +275,19 @@ export default function MyPage() {
                     styles.menuBtn,
                     idx !== menuItems.length - 1 && styles.menuBtnBorder
                   ]}
+                  activeOpacity={0.6} // 👈 增加点击半透明触感反馈
                   onPress={() => {
                     if (item.id === 'logout') {
-                      handleLogout();
+                      handleLogout(); // 👈 触发确认弹窗
                     } else {
                       toggleSection(item.id);
                     }
                   }}
                 >
-                  <MaterialCommunityIcons name={item.icon as any} size={20} color="#333" />
-                  <ThemedText type="default" style={styles.menuLabel}>{item.label}</ThemedText>
+                  <MaterialCommunityIcons name={item.icon} size={20} color={item.id === 'logout' ? '#D9383A' : '#333'} />
+                  <ThemedText type="default" style={[styles.menuLabel, item.id === 'logout' && { color: '#D9383A', fontWeight: '500' }]}>
+                    {item.label}
+                  </ThemedText>
                   {item.id !== 'logout' && (
                     <MaterialCommunityIcons
                       name={expandedSections[item.id] ? 'chevron-up' : 'chevron-right'}
@@ -281,12 +306,9 @@ export default function MyPage() {
               </View>
             ))}
           </View>
-
-          {/* Spacer for bottom nav */}
-          <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Tab Bar */}
+        {/* 自定义 TabBar 区域 */}
         <View style={styles.tabBarContainer}>
           <View style={styles.scanBackgroundCircle} />
           <View style={styles.tabBarBackground} />
@@ -329,48 +351,16 @@ const styles = StyleSheet.create({
   mainWrapper: { flex: 1, backgroundColor: '#F5F5F5' },
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   scrollView: { flex: 1 },
-  header: { backgroundColor: '#fff', paddingHorizontal: 16, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
+  scrollContent: {
+    paddingTop: 10,
+    paddingBottom: 150, // 👈 核心修改：将安全滚动留白提升至 150，确保“ログアウト”可以被彻底推到绝对定位的透明屏障之上！
+  },
+  header: { backgroundColor: '#fff', paddingHorizontal: 16, paddingTop: 60, paddingBottom: 16, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
   userInfo: { flexDirection: 'row', gap: 12, marginBottom: 16, alignItems: 'flex-start' },
-  
-  // Avatar Styles Fixed
-  avatarWrapper: {
-    position: 'relative',
-    width: 56,
-    height: 56,
-  },
-  avatar: { 
-    width: '100%', 
-    height: '100%', 
-    borderRadius: 28, 
-    backgroundColor: '#f0f0f0', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    overflow: 'hidden' 
-  },
-  avatarImage: { 
-    width: '100%', 
-    height: '100%', 
-    borderRadius: 28 
-  },
-  cameraIconBadge: { 
-    position: 'absolute', 
-    bottom: -4,
-    right: -4,
-    backgroundColor: '#FFFFFF', 
-    width: 24, 
-    height: 24, 
-    borderRadius: 12, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
-  },
-
+  avatarWrapper: { position: 'relative', width: 56, height: 56 },
+  avatar: { width: '100%', height: '100%', borderRadius: 28, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 28 },
+  cameraIconBadge: { position: 'absolute', bottom: -4, right: -4, backgroundColor: '#FFFFFF', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E0E0E0', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.41, elevation: 2 },
   userDetails: { flex: 1 },
   userName: { fontSize: 16, fontWeight: '500', color: '#333', marginBottom: 4 },
   userLocation: { fontSize: 13, color: '#999' },
@@ -403,12 +393,14 @@ const styles = StyleSheet.create({
   displayText: { fontSize: 13, color: '#666', marginBottom: 8 },
   secondaryBtn: { paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#fff', borderWidth: 0.5, borderColor: '#d0d0d0', borderRadius: 8, marginTop: 8 },
   secondaryBtnText: { fontSize: 13, color: '#333', textAlign: 'center' },
-  menuBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 0, gap: 12 },
+  menuBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4, gap: 12 },
   menuBtnBorder: { borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
   menuLabel: { flex: 1, fontSize: 14, color: '#333' },
   menuContent: { paddingVertical: 12, paddingHorizontal: 0, backgroundColor: '#f5f5f5', marginTop: -8 },
   menuContentTitle: { fontSize: 13, color: '#333', marginBottom: 8 },
   menuContentText: { fontSize: 13, color: '#666', lineHeight: 20 },
+
+  // 自定义 TabBar 样式保持一致
   tabBarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 95, justifyContent: 'flex-end' },
   tabBarBackground: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 70, backgroundColor: '#D1E0C5', zIndex: 1 },
   scanBackgroundCircle: { position: 'absolute', bottom: 30, alignSelf: 'center', width: 72, height: 72, borderRadius: 36, backgroundColor: '#D1E0C5', zIndex: 1 },

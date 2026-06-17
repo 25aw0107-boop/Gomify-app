@@ -1,7 +1,6 @@
-
 import { ThemedText } from '@/components/themed-text';
 import { AntDesign, FontAwesome5, Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router'; // 👈 引入 Stack 组件隐藏白条
 import { ImageBackground, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 export default function DashboardScreen() {
@@ -9,6 +8,9 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.mainWrapper}>
+      {/* 👈 隐藏默认的顶部白色路径导航栏 */}
+      <Stack.Screen options={{ headerShown: false }} />
+
       <View style={styles.container}>
         <ImageBackground
           source={require('@/assets/images/Rectangle 8.png')}
@@ -36,14 +38,14 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-       <View style={styles.gridContainer}>
-  <View style={styles.cardLeft}>
-    <ThemedText style={styles.cardTitle}>燃えるゴミの日</ThemedText>
-    <View style={styles.cardContentColumn}>
-      <ThemedText style={styles.cardDateText}>明日5/16 (木)</ThemedText>
-      <Ionicons name="flame" size={38} color="#EF4444" />
-    </View>
-  </View>
+          <View style={styles.gridContainer}>
+            <View style={styles.cardLeft}>
+              <ThemedText style={styles.cardTitle}>燃えるゴミの日</ThemedText>
+              <View style={styles.cardContentColumn}>
+                <ThemedText style={styles.cardDateText}>明日5/16 (木)</ThemedText>
+                <Ionicons name="flame" size={38} color="#EF4444" />
+              </View>
+            </View>
 
             <View style={styles.cardRight}>
               <View style={styles.cardHeaderRow}>
@@ -64,9 +66,9 @@ export default function DashboardScreen() {
               <MaterialCommunityIcons name="sofa-outline" size={24} color="#000" />
             </View>
 
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.itemsScroll}
             >
               {[1, 2, 3, 4, 5].map((item, index) => (
@@ -97,7 +99,7 @@ export default function DashboardScreen() {
       <View style={styles.tabBarContainer}>
         <View style={styles.scanBackgroundCircle} />
         <View style={styles.tabBarBackground} />
-        
+
         <View style={styles.tabBarContent}>
           <Pressable style={styles.tabItem} onPress={() => router.push('/dashboard')}>
             <Octicons name="home" size={24} color="#5B9E00" />
@@ -140,7 +142,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heroBackground: {
-    width: 400,
+    width: '100%', // 👈 核心修复点：改成 100% 宽度，无论多大的手机屏幕都会完美整体填满
     height: 220,
     paddingTop: 60,
     paddingHorizontal: 24,
@@ -166,7 +168,7 @@ const styles = StyleSheet.create({
   contentBody: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingBottom: 110, 
+    paddingBottom: 110,
   },
   taskCard: {
     backgroundColor: '#fff',
@@ -190,12 +192,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardContentColumn: {
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '100%',
-  gap: 8,
-},
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    gap: 8,
+  },
   taskTitle: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -228,9 +230,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
-    justifyContent: 'flex-start', 
+    justifyContent: 'flex-start',
   },
-
   cardRight: {
     flex: 1,
     height: 140,
@@ -308,7 +309,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   itemCard: {
-    width: 160, 
+    width: 160,
     height: 130,
     backgroundColor: '#EAE8E0',
     borderRadius: 12,

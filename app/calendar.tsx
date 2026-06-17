@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Pressable, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router'; // 👈 修复点1：引入 Stack 组件
 import { Ionicons, FontAwesome5, Octicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 
@@ -76,6 +76,9 @@ export default function CalendarScreen() {
 
     return (
         <View style={styles.mainWrapper}>
+            {/* 👈 修复点2：在这里插入 Stack.Screen 并隐藏默认的白色头部导航栏 */}
+            <Stack.Screen options={{ headerShown: false }} />
+
             {/* 页面主内容区域，加上 ScrollView 防止未来数据多时产生溢出 */}
             <ScrollView contentContainerStyle={styles.contentBody}>
 
@@ -194,7 +197,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginTop: 4,
     },
-    // 日历白底卡片，延续主页的高级圆角阴影质感
     calendarCard: {
         backgroundColor: '#fff',
         borderRadius: 24,
@@ -224,11 +226,11 @@ const styles = StyleSheet.create({
     },
     gridContainer: {
         flexDirection: 'row',
-        flexWrap: 'wrap', // 让 36 个格子自动排成多行
+        flexWrap: 'wrap',
         justifyContent: 'flex-start',
     },
     dateCell: {
-        width: '14.28%', // 100% / 7 列
+        width: '14.28%',
         height: 44,
         justifyContent: 'center',
         alignItems: 'center',
@@ -242,9 +244,8 @@ const styles = StyleSheet.create({
     },
     todayCell: {
         borderWidth: 2,
-        borderColor: '#76C800', // 用主页的主题绿色圈出今天
+        borderColor: '#76C800',
     },
-    // 规则参考样式
     legendContainer: {
         backgroundColor: '#fff',
         borderRadius: 24,
@@ -277,7 +278,6 @@ const styles = StyleSheet.create({
         color: '#444',
         fontWeight: '500',
     },
-    // ---- 底部通用五个导航栏菜单样式 (完全复制主页布局代码) ----
     tabBarContainer: {
         position: 'absolute',
         bottom: 0,
