@@ -1,13 +1,22 @@
 import { ThemedText } from '@/components/themed-text';
 import { FontAwesome5, Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter, Stack } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useRouter, Stack, useFocusEffect } from 'expo-router'; // 💡 引入 useFocusEffect 确保返回时也能刷新
+import React, { useState, useCallback } from 'react'; // 💡 引入 React 和 useCallback
+import { Alert, Image, Pressable, ScrollView, StyleSheet, TouchableOpacity, View, Platform, Modal, ActivityIndicator } from 'react-native';
 import { supabase } from '@/lib/supabase'; // 🔐 引入 Supabase 客户端
 
 export default function MyPage() {
   const router = useRouter();
+
+  // 🚪 状态控制：控制自定义 App 登出弹窗的显示/隐藏
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  // 👤 ✨ 新增：动态用户数据状态
+  const [userEmail, setUserEmail] = useState('加载中...');
+  const [userLocation, setUserLocation] = useState('未設定');
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
+
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     design: false,
     display: false,
@@ -23,6 +32,62 @@ export default function MyPage() {
 
   const maxPoints = 30;
   const pointsPercent = (points / maxPoints) * 100;
+
+  // 🌍 ✨ 核心：从 profiles 表全量抓取用户名、省份、城市
+  const fetchUserData = async () => {
+    setIsProfileLoading(true);
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData || !authData.user) {
+        throw authError || new Error('No user logged in');
+      }
+
+      const currentUser = authData.user;
+
+      // 🎯 核心看这里：直接把 nickname 一起 select 出来！
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('nickname, prefecture, city')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (profileError) {
+        console.warn('读取 Profiles 数据库失败:', profileError.message);
+      }
+
+      // 🎯 名字渲染逻辑
+      let finalDisplayName = '';
+      if (profile && profile.nickname) {
+        finalDisplayName = profile.nickname; // 👈 此时这里就会直接拿到 “イさん” 或 “何鑫”
+      } else {
+        finalDisplayName = currentUser.email ? currentUser.email.split('@')[0] : '名無しユーザー';
+      }
+      setUserEmail(finalDisplayName);
+
+      // 🎯 位置渲染逻辑
+      if (profile) {
+        const pref = profile.prefecture || '';
+        const city = profile.city || '';
+        setUserLocation(`${pref} ${city}`.trim() || '未設定');
+      } else {
+        setUserLocation('未設定');
+      }
+
+    } catch (err) {
+      console.error('获取用户信息失败:', err);
+      setUserEmail('未ログイン');
+      setUserLocation('未設定');
+    } finally {
+      setIsProfileLoading(false);
+    }
+  };
+  // 🔄 使用 useFocusEffect 确保每次切换回“マイページ”时都会自动加载最新数据
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserData();
+      return () => { };
+    }, [])
+  );
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({
@@ -63,9 +128,17 @@ export default function MyPage() {
       setPoints(points - amount);
       setSelectedDesign(designMode);
       setExpandedSections(prev => ({ ...prev, design: false }));
-      Alert.alert('成功', `${designMode}に変更しました`);
+      if (Platform.OS === 'web') {
+        alert(`成功: ${designMode}に変更しました`);
+      } else {
+        Alert.alert('成功', `${designMode}に変更しました`);
+      }
     } else {
-      Alert.alert('ポイント不足', 'ポイントが足りません');
+      if (Platform.OS === 'web') {
+        alert('ポイント不足: ポイントが足りません');
+      } else {
+        Alert.alert('ポイント不足', 'ポイントが足りません');
+      }
     }
   };
 
@@ -75,7 +148,7 @@ export default function MyPage() {
       icon: 'information' as const,
       label: 'Gomifyについて',
       title: 'Gomifyについて',
-      content: 'Gomify（ゴミファイ）は、一人暮らしを始めたばかりの方や、日本にて交わるゴミの分別法に困っている、ユーザーの皆さまが一番困っている「ゴミ出し」をサポートするアプリです。'
+      content: 'Gomify（ゴミファイ）は、一人暮らしを始めたばかりの方或いは、日本にてゴミの分別法に困っている、ユーザーの皆さまが一番困っている「ゴミ出し」をサポートするアプリです。'
     },
     {
       id: 'help',
@@ -100,25 +173,29 @@ export default function MyPage() {
     }
   ];
 
-  // 🔐 真实登出处理函数
+  // 🔐 核心登出骨架
+  const executeSignOut = async () => {
+    setLogoutModalVisible(false); // 关闭弹窗
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      router.replace('/'); // 强切至首页
+    }
+  };
+
   const handleLogout = () => {
-    Alert.alert('ログアウト', 'ログアウトしてもよろしいですか？', [
-      { text: 'キャンセル', onPress: () => { }, style: 'cancel' },
-      {
-        text: 'ログアウト',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const { error } = await supabase.auth.signOut(); // 物理清理 Token 缓存
-            if (error) {
-              Alert.alert('エラー', 'ログアウトに失敗しました: ' + error.message);
-            }
-          } catch (err) {
-            Alert.alert('エラー', '予期せぬエラーが発生しました');
-          }
-        }
-      }
-    ]);
+    if (Platform.OS === 'web') {
+      // 🌐 Web 端激活自定义 App 样式弹窗
+      setLogoutModalVisible(true);
+    } else {
+      // 📱 手机端依旧保持丝滑的原生震动弹窗
+      Alert.alert('ログアウト', 'ログアウトしてもよろしいですか？', [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: 'ログアウト', style: 'destructive', onPress: executeSignOut }
+      ]);
+    }
   };
 
   return (
@@ -129,7 +206,7 @@ export default function MyPage() {
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent} // 👈 绑定更新后的样式
+          contentContainerStyle={styles.scrollContent}
         >
 
           {/* Header */}
@@ -148,9 +225,20 @@ export default function MyPage() {
                 </TouchableOpacity>
               </View>
 
+              {/* 👤 动态展示 Supabase 提取的用户注册账号与填写的具体位置 */}
               <View style={styles.userDetails}>
-                <ThemedText type="default" style={styles.userName}>ユーザー名</ThemedText>
-                <ThemedText type="default" style={styles.userLocation}>📍 東京都 渋谷区</ThemedText>
+                {isProfileLoading ? (
+                  <ActivityIndicator size="small" color="#5B9E00" style={styles.loaderLeft} />
+                ) : (
+                  <>
+                    <ThemedText type="default" style={styles.userName} numberOfLines={1}>
+                      {userEmail}
+                    </ThemedText>
+                    <ThemedText type="default" style={styles.userLocation}>
+                      📍 {userLocation}
+                    </ThemedText>
+                  </>
+                )}
               </View>
             </View>
             <TouchableOpacity style={styles.profileBtn} activeOpacity={0.7}>
@@ -275,10 +363,10 @@ export default function MyPage() {
                     styles.menuBtn,
                     idx !== menuItems.length - 1 && styles.menuBtnBorder
                   ]}
-                  activeOpacity={0.6} // 👈 增加点击半透明触感反馈
+                  activeOpacity={0.6}
                   onPress={() => {
                     if (item.id === 'logout') {
-                      handleLogout(); // 👈 触发确认弹窗
+                      handleLogout();
                     } else {
                       toggleSection(item.id);
                     }
@@ -343,6 +431,49 @@ export default function MyPage() {
           </View>
         </View>
       </View>
+
+      {/* 自定义 App 级 Web 兼容登出弹窗 */}
+      <Modal
+        transparent={true}
+        visible={logoutModalVisible}
+        animationType="fade"
+        onRequestClose={() => setLogoutModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setLogoutModalVisible(false)}
+        >
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <MaterialCommunityIcons name="logout" size={28} color="#D9383A" />
+              <ThemedText style={styles.modalTitle}>ログアウト</ThemedText>
+            </View>
+
+            <ThemedText style={styles.modalText}>
+              ログアウトしてもよろしいですか？
+            </ThemedText>
+
+            <View style={styles.modalButtonGroup}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setLogoutModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <ThemedText style={styles.modalButtonTextCancel}>いいえ</ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={executeSignOut}
+                activeOpacity={0.7}
+              >
+                <ThemedText style={styles.modalButtonTextConfirm}>はい</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
     </View>
   );
 }
@@ -353,17 +484,18 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: {
     paddingTop: 10,
-    paddingBottom: 150, // 👈 核心修改：将安全滚动留白提升至 150，确保“ログアウト”可以被彻底推到绝对定位的透明屏障之上！
+    paddingBottom: 150,
   },
   header: { backgroundColor: '#fff', paddingHorizontal: 16, paddingTop: 60, paddingBottom: 16, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
-  userInfo: { flexDirection: 'row', gap: 12, marginBottom: 16, alignItems: 'flex-start' },
+  userInfo: { flexDirection: 'row', gap: 12, marginBottom: 16, alignItems: 'center' }, // 调整为居中更美观
   avatarWrapper: { position: 'relative', width: 56, height: 56 },
   avatar: { width: '100%', height: '100%', borderRadius: 28, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   avatarImage: { width: '100%', height: '100%', borderRadius: 28 },
   cameraIconBadge: { position: 'absolute', bottom: -4, right: -4, backgroundColor: '#FFFFFF', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E0E0E0', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.41, elevation: 2 },
-  userDetails: { flex: 1 },
-  userName: { fontSize: 16, fontWeight: '500', color: '#333', marginBottom: 4 },
-  userLocation: { fontSize: 13, color: '#999' },
+  userDetails: { flex: 1, justifyContent: 'center' },
+  userName: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
+  userLocation: { fontSize: 13, color: '#666', fontWeight: '500' },
+  loaderLeft: { alignSelf: 'flex-start', marginTop: 8 },
   profileBtn: { paddingVertical: 8, paddingHorizontal: 12, borderWidth: 0.5, borderColor: '#d0d0d0', borderRadius: 8, backgroundColor: '#fff' },
   profileBtnText: { fontSize: 14, color: '#333', textAlign: 'center' },
   card: { backgroundColor: '#fff', marginHorizontal: 12, marginVertical: 12, borderRadius: 12, padding: 16, borderWidth: 0.5, borderColor: '#e0e0e0' },
@@ -400,7 +532,6 @@ const styles = StyleSheet.create({
   menuContentTitle: { fontSize: 13, color: '#333', marginBottom: 8 },
   menuContentText: { fontSize: 13, color: '#666', lineHeight: 20 },
 
-  // 自定义 TabBar 样式保持一致
   tabBarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 95, justifyContent: 'flex-end' },
   tabBarBackground: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 70, backgroundColor: '#D1E0C5', zIndex: 1 },
   scanBackgroundCircle: { position: 'absolute', bottom: 30, alignSelf: 'center', width: 72, height: 72, borderRadius: 36, backgroundColor: '#D1E0C5', zIndex: 1 },
@@ -411,4 +542,72 @@ const styles = StyleSheet.create({
   scanWrapper: { alignItems: 'center', justifyContent: 'center', flex: 1, height: 95 },
   scanButton: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 3, marginBottom: 2 },
   scanLabel: { fontSize: 9, color: '#555', marginTop: 2, fontWeight: '700', textAlign: 'center' },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: 310,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333333',
+  },
+  modalText: {
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  modalButtonGroup: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  modalButtonCancel: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E0E0E0',
+  },
+  modalButtonConfirm: {
+    backgroundColor: '#D9383A',
+    borderColor: '#D9383A',
+  },
+  modalButtonTextCancel: {
+    fontSize: 14,
+    color: '#666666',
+    fontWeight: '500',
+  },
+  modalButtonTextConfirm: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
 });

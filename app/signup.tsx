@@ -7,9 +7,9 @@ import { supabase } from '@/lib/supabase';
 
 export default function SignUpScreen() {
   const router = useRouter();
-  
+
   // ----------------------------------------
-  // 状态控制：控制当前处于第几步 (1: 账号密码, 2: 住所输入)
+  // 状態控制：控制当前处于第几步 (1: 账号密码, 2: 住所输入)
   // ----------------------------------------
   const [step, setStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
@@ -81,12 +81,13 @@ export default function SignUpScreen() {
         throw new Error('ユーザーの作成に失敗しました。');
       }
 
-      // 【动作 2】用刚刚生成的 uid，直接将地址数据写入公共 profiles 表中
+      // 🎯【动作 2】修正：用刚刚生成的 uid，直接将地址数据以及第一步的 name 写入公共 profiles 表中
       const { error: insertError } = await supabase
         .from('profiles')
         .insert([
           {
-            id: user.id, 
+            id: user.id,
+            nickname: name, // 👈 核心：将注册第一步填写的 Full Name 状态绑定推送至数据库的 nickname 字段！
             postal_code: postalCode,
             prefecture: prefecture,
             city: city,
@@ -297,7 +298,7 @@ export default function SignUpScreen() {
         </View>
       </ScrollView>
 
-      <Pressable 
+      <Pressable
         onPress={handleFinalSubmit}
         style={[styles.submitButtonAddress, loading && styles.submitButtonDisabledAddress]}
         disabled={loading}

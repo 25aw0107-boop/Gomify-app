@@ -1,188 +1,456 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, FlatList, Pressable, ScrollView, Alert } from 'react-native';
-import { useRouter, Stack } from 'expo-router'; // 👈 引入 Stack 用于隐藏顶部路径
+import React, { useState, useEffect, useCallback } from 'react';
+import { StyleSheet, View, FlatList, Pressable, Image, ActivityIndicator, Modal, RefreshControl } from 'react-native';
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons, FontAwesome5, MaterialIcons, Octicons, Feather } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
+import { supabase } from '@/lib/supabase';
 
 type TabType = 'discover' | 'favorites' | 'listings' | 'messages';
+type ModalMode = 'delete_listing' | 'delete_chatroom';
+
+type ChatRoomListItem = {
+    id: string;
+    itemId: string;
+    itemTitle: string;
+    itemImage: string | null;
+    partnerName: string;
+    lastMessage: string;
+    lastTime: string;
+    unreadCount: number;
+};
 
 export default function ReuseScreen() {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<TabType>('discover');
 
-    // 商品列表数据
-    const [items, setItems] = useState([
-        { id: '1', title: '自転車', quality: '古い', location: '新宿駅', distance: '3km', isLiked: true, status: 'discover' },
-        { id: '2', title: '木の椅子', quality: '古い', location: '新宿駅', distance: '3km', isLiked: false, status: 'discover' },
-        { id: '3', title: '電子レンジ', quality: '古い', location: '新宿駅', distance: '3km', isLiked: true, status: 'discover' },
-        { id: '4', title: '電子レンジ', quality: '古い', location: '新宿駅', distance: '3km', isLiked: false, status: 'discover' },
-        { id: '5', title: 'マイ出品のテーブル', quality: '目立った傷なし', location: '渋谷駅', distance: '1km', isLiked: false, status: 'listings' },
-    ]);
+    const [isFirstLoading, setIsFirstLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // 消息列表数据
-    const [messageItems, setMessageItems] = useState([
-        {
-            id: 'm1',
-            userName: '4336_山田 さん',
-            text: 'こんにちは。\n投稿を見ました。もしよければ...',
-            time: '11:25',
-            itemTitle: '自転車'
-        }
-    ]);
+    // --- 🎛️ 弹窗状态管理 ---
+    const [isModalVisible, setIsModalVisible] = useState(false);
+    const [modalMode, setModalMode] = useState<ModalMode>('delete_listing');
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [selectedTitle, setSelectedTitle] = useState('');
 
-    const toggleLike = (id: string) => {
-        setItems(prevItems =>
-            prevItems.map(item =>
-                item.id === id ? { ...item, isLiked: !item.isLiked } : item
-            )
-        );
+    const [discoverItems, setDiscoverItems] = useState<any[]>([]);
+    const [favoriteItems, setFavoriteItems] = useState<any[]>([]);
+    const [myListings, setMyListings] = useState<any[]>([]);
+    const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+    const [messageItems, setMessageItems] = useState<ChatRoomListItem[]>([]);
+    const [globalUnreadCount, setGlobalUnreadCount] = useState<number>(0);
+
+    const formatTime = (isoString: string | null) => {
+        if (!isoString) return '';
+        const date = new Date(isoString);
+        return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
     };
 
-    // 处理卖家删除自己出品物资的逻辑
-    const handleDeleteProduct = (id: string, title: string) => {
-        Alert.alert(
-            "出品削除",
-            `「${title}」の出品を取り消しますか？\n（この操作は取り消せません）`,
-            [
-                {
-                    text: "キャンセル",
-                    style: "cancel"
-                },
-                {
-                    text: "削除する",
-                    style: "destructive",
-                    onPress: () => {
-                        // 从核心数据列表中将对应的商品彻底滤除
-                        setItems(prevItems => prevItems.filter(item => item.id !== id));
-                    }
+    // --- 🌍 计算全局未读消息数 ---
+    const checkGlobalUnreadCount = async (userId: string) => {
+        try {
+            const { count, error } = await supabase
+                .from('chat_messages')
+                .select('*', { count: 'exact', head: true })
+                .neq('sender_id', userId)
+                .eq('is_read', false);
+
+            if (!error && count !== null) {
+                setGlobalUnreadCount(count);
+            }
+        } catch (err) {
+            console.error('获取全局未读数失败:', err);
+        }
+    };
+
+    // --- 🌍 消息列表数据加载 ---
+    const loadRealMessageData = async (userId: string) => {
+        try {
+            const { data: roomsData, error: roomErr } = await supabase
+                .from('chat_rooms')
+                .select(`
+                    id, buyer_id, seller_id, item_id,
+                    items!inner ( title, images )
+                `)
+                .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`);
+
+            if (roomErr) throw roomErr;
+
+            if (roomsData) {
+                const formatted: ChatRoomListItem[] = await Promise.all(
+                    roomsData.map(async (room: any) => {
+                        const targetUserId = room.buyer_id === userId ? room.seller_id : room.buyer_id;
+
+                        let partnerName = 'ユーザー';
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('nickname')
+                            .eq('id', targetUserId)
+                            .maybeSingle();
+                        if (profile?.nickname) partnerName = profile.nickname;
+
+                        const { data: lastMsgData } = await supabase
+                            .from('chat_messages')
+                            .select('text, created_at')
+                            .eq('room_id', room.id)
+                            .order('created_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+
+                        const { count: unreadCountResult } = await supabase
+                            .from('chat_messages')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('room_id', room.id)
+                            .neq('sender_id', userId)
+                            .eq('is_read', false);
+
+                        return {
+                            id: room.id,
+                            itemId: room.item_id,
+                            itemTitle: room.items?.title || '無題の商品',
+                            itemImage: room.items?.images && room.items.images.length > 0 ? room.items.images[0] : null,
+                            partnerName,
+                            lastMessage: lastMsgData ? lastMsgData.text : 'まだメッセージはありません',
+                            lastTime: lastMsgData ? formatTime(lastMsgData.created_at) : '',
+                            unreadCount: unreadCountResult || 0
+                        };
+                    })
+                );
+
+                formatted.sort((a, b) => b.lastTime.localeCompare(a.lastTime));
+                setMessageItems(formatted);
+
+                const totalUnread = formatted.reduce((sum, item) => sum + item.unreadCount, 0);
+                setGlobalUnreadCount(totalUnread);
+            }
+        } catch (err) {
+            console.error('【消息加载层】错误:', err);
+        }
+    };
+
+    // --- 🌍 数据拉取管理中心 ---
+    const fetchAllData = async (showGlobalLoader = false) => {
+        if (showGlobalLoader) setIsFirstLoading(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            setCurrentUserId(user.id);
+
+            await checkGlobalUnreadCount(user.id);
+
+            const { data: favRecords } = await supabase
+                .from('favorites')
+                .select('item_id')
+                .eq('user_id', user.id);
+            const favIdSet = new Set<string>((favRecords || []).map(f => f.item_id));
+            setFavoritedIds(favIdSet);
+
+            if (activeTab === 'discover') {
+                const { data } = await supabase
+                    .from('items')
+                    .select('*')
+                    .not('user_id', 'eq', user.id)
+                    .order('created_at', { ascending: false });
+                if (data) setDiscoverItems(data);
+
+            } else if (activeTab === 'favorites') {
+                const { data } = await supabase
+                    .from('items')
+                    .select('*, favorites!inner(*)')
+                    .eq('favorites.user_id', user.id)
+                    .order('created_at', { ascending: false });
+                if (data) setFavoriteItems(data);
+
+            } else if (activeTab === 'listings') {
+                const { data } = await supabase
+                    .from('items')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .order('created_at', { ascending: false });
+                if (data) setMyListings(data);
+
+            } else if (activeTab === 'messages') {
+                await loadRealMessageData(user.id);
+            }
+        } catch (error: any) {
+            console.error('データ更新失敗:', error);
+        } finally {
+            setIsFirstLoading(false);
+            setIsRefreshing(false);
+        }
+    };
+
+    useFocusEffect(
+        useCallback(() => {
+            let isFocused = true;
+            if (isFocused) {
+                if (activeTab === 'messages') {
+                    fetchAllData(false);
+                } else {
+                    const hasNoData =
+                        (activeTab === 'discover' && discoverItems.length === 0) ||
+                        (activeTab === 'favorites' && favoriteItems.length === 0) ||
+                        (activeTab === 'listings' && myListings.length === 0);
+
+                    fetchAllData(hasNoData);
                 }
-            ]
-        );
+            }
+            return () => { isFocused = false; };
+        }, [activeTab])
+    );
+
+    const onRefresh = () => {
+        setIsRefreshing(true);
+        fetchAllData(false);
+    };
+
+    const toggleLike = async (itemId: string) => {
+        if (!currentUserId) return;
+        const isCurrentlyLiked = favoritedIds.has(itemId);
+        const nextIds = new Set(favoritedIds);
+        if (isCurrentlyLiked) {
+            nextIds.delete(itemId);
+            if (activeTab === 'favorites') setFavoriteItems(prev => prev.filter(item => item.id !== itemId));
+        } else {
+            nextIds.add(itemId);
+        }
+        setFavoritedIds(nextIds);
+        try {
+            if (isCurrentlyLiked) {
+                await supabase.from('favorites').delete().eq('user_id', currentUserId).eq('item_id', itemId);
+            } else {
+                await supabase.from('favorites').insert({ user_id: currentUserId, item_id: itemId });
+            }
+        } catch (err) {
+            console.error('お気に入り操作失敗:', err);
+            fetchAllData(false);
+        }
+    };
+
+    const openDeleteModal = (id: string, title: string, mode: ModalMode) => {
+        setSelectedId(id);
+        setSelectedTitle(title);
+        setModalMode(mode);
+        setIsModalVisible(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!selectedId) return;
+        setIsModalVisible(false);
+
+        try {
+            if (modalMode === 'delete_listing') {
+                const { error } = await supabase.from('items').delete().eq('id', selectedId);
+                if (error) throw error;
+                setMyListings(prev => prev.filter(item => item.id !== selectedId));
+            } else if (modalMode === 'delete_chatroom') {
+                const { error: msgDeleteError } = await supabase
+                    .from('chat_messages')
+                    .delete()
+                    .eq('room_id', selectedId);
+
+                if (msgDeleteError) throw msgDeleteError;
+
+                const { error: roomDeleteError } = await supabase
+                    .from('chat_rooms')
+                    .delete()
+                    .eq('id', selectedId);
+
+                if (roomDeleteError) throw roomDeleteError;
+
+                setMessageItems(prev => prev.filter(room => room.id !== selectedId));
+                if (currentUserId) await checkGlobalUnreadCount(currentUserId);
+            }
+        } catch (error: any) {
+            console.error('【彻底删除失败】错误详情:', error.message || error);
+            alert('削除に失敗しました。');
+            if (currentUserId) fetchAllData(false);
+        } finally {
+            setSelectedId(null);
+            setSelectedTitle('');
+        }
     };
 
     const getFilteredData = () => {
         switch (activeTab) {
-            case 'discover': return items.filter(item => item.status === 'discover');
-            case 'favorites': return items.filter(item => item.isLiked);
-            case 'listings': return items.filter(item => item.status === 'listings');
+            case 'discover': return discoverItems;
+            case 'favorites': return favoriteItems;
+            case 'listings': return myListings;
             case 'messages': return messageItems;
             default: return [];
         }
     };
 
-    // 显式将类型指定为 any，消除 TypeScript 对混合数据源的推断红线
-    const renderProductItem = ({ item }: { item: any }) => (
-        <Pressable style={styles.itemCard} onPress={() => router.push(`/reuse/${item.id}`)}>
-            <View style={styles.imageContainer}>
-                <View style={styles.imagePlaceholder}>
-                    <FontAwesome5 name="bicycle" size={40} color="#aaa" />
-                </View>
-                <View style={styles.imageInnerHeart}>
-                    <Ionicons name="heart-outline" size={14} color="#666" />
-                </View>
-            </View>
+    const renderProductItem = ({ item }: { item: any }) => {
+        const isMyRealListing = activeTab === 'listings';
+        const hasImage = item.images && item.images.length > 0;
+        const imageUrl = hasImage ? item.images[0] : null;
+        const itemId = item.id;
+        const itemTitle = item.title || '無題の商品';
+        const isItemLiked = activeTab === 'favorites' ? true : favoritedIds.has(itemId);
 
-            <View style={styles.itemInfo}>
-                <ThemedText style={styles.itemTitle}>{item.title}</ThemedText>
-                <ThemedText style={styles.itemDetail}>品质：{item.quality}</ThemedText>
-                <ThemedText style={styles.itemDetail}>{item.location}   {item.distance}</ThemedText>
-            </View>
+        return (
+            <Pressable style={styles.itemCard} onPress={() => router.push(`/reuse/${itemId}`)}>
+                <View style={styles.imageContainer}>
+                    {hasImage ? (
+                        <Image source={{ uri: imageUrl }} style={styles.productImage} />
+                    ) : (
+                        <View style={styles.imagePlaceholder}><FontAwesome5 name="box" size={32} color="#aaa" /></View>
+                    )}
+                </View>
+                <View style={styles.itemInfo}>
+                    <ThemedText style={styles.itemTitle}>{itemTitle}</ThemedText>
+                    <ThemedText style={styles.itemDetail}>状態：{item.quality || '未設定'}</ThemedText>
+                    <ThemedText style={styles.itemDetail}>
+                        <Ionicons name="location-outline" size={12} color="#666" /> {item.station || '指定なし'}
+                    </ThemedText>
+                </View>
+                {!isMyRealListing ? (
+                    <Pressable style={styles.rightHeartButton} onPress={() => toggleLike(itemId)}>
+                        <Ionicons name={isItemLiked ? "heart" : "heart-outline"} size={26} color={isItemLiked ? "#FFB1B1" : "#C2C2C2"} />
+                    </Pressable>
+                ) : (
+                    <Pressable style={[styles.rightDeleteButton]} onPress={() => openDeleteModal(itemId, itemTitle, 'delete_listing')}>
+                        <Feather name="trash-2" size={22} color="#FF4D4F" />
+                    </Pressable>
+                )}
+            </Pressable>
+        );
+    };
 
-            {/* 如果不是“出品中”状态，显示原有的收藏爱心按钮 */}
-            {activeTab !== 'listings' ? (
-                <Pressable style={styles.rightHeartButton} onPress={() => toggleLike(item.id)}>
-                    <Ionicons
-                        name={item.isLiked ? "heart" : "heart-outline"}
-                        size={26}
-                        color={item.isLiked ? "#FFB1B1" : "#C2C2C2"}
-                    />
-                </Pressable>
-            ) : (
-                /* 如果是“出品中”状态，则在最右侧精准渲染垃圾桶删除按钮 */
-                <Pressable
-                    style={({ pressed }) => [
-                        styles.rightDeleteButton,
-                        pressed && styles.deleteButtonPressed
-                    ]}
-                    onPress={() => handleDeleteProduct(item.id, item.title)}
-                >
-                    <Feather name="trash-2" size={22} color="#FF4D4D" />
-                </Pressable>
-            )}
-        </Pressable>
+    // 🌟 【重构核心：优雅一体化的聊天信息卡片】
+    const renderMessageItem = ({ item }: { item: ChatRoomListItem }) => (
+        <View style={styles.messageCardWrapper}>
+            <Pressable
+                style={styles.messageCard}
+                onPress={() => router.push({
+                    pathname: `/messages/${item.id}`,
+                    params: { itemId: item.itemId }
+                })}
+            >
+                {/* 1. 左侧：头像区域 */}
+                <View style={styles.avatarContainer}>
+                    <View style={styles.avatarInnerCircle}>
+                        <Ionicons name="person" size={24} color="#A0AEC0" />
+                    </View>
+                    {item.unreadCount > 0 && <View style={styles.miniDotBadge} />}
+                </View>
+
+                {/* 2. 中间：内容区域 */}
+                <View style={styles.messageContent}>
+                    <View style={styles.messageUpperRow}>
+                        <ThemedText style={styles.messageUserName} numberOfLines={1}>{item.partnerName}</ThemedText>
+                        <ThemedText style={styles.messageTime}>{item.lastTime}</ThemedText>
+                    </View>
+                    <ThemedText style={[styles.messageText, item.unreadCount > 0 && styles.unreadMessageText]} numberOfLines={1}>
+                        {item.lastMessage}
+                    </ThemedText>
+                </View>
+
+                {/* 3. 右侧：商品缩略图与精修版删除按钮组 */}
+                <View style={styles.messageRightActionSection}>
+                    <View style={styles.messageMiniItemImageWrapper}>
+                        {item.itemImage ? (
+                            <Image source={{ uri: item.itemImage }} style={styles.messageMiniItemImage} />
+                        ) : (
+                            <FontAwesome5 name="box" size={12} color="#CBD5E0" />
+                        )}
+                    </View>
+
+                    {/* 内嵌精致小巧的红粉删除键 */}
+                    <Pressable
+                        style={styles.inlineRoomDeleteButton}
+                        onPress={() => openDeleteModal(item.id, item.partnerName, 'delete_chatroom')}
+                        hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
+                    >
+                        <Feather name="trash-2" size={15} color="#FF4D4F" />
+                    </Pressable>
+                </View>
+            </Pressable>
+        </View>
     );
-
-    // 将类型显式指定为 any，防止多 Tab 数据冲突引发红线
-    const renderMessageItem = ({ item }: { item: any }) => (
-        <Pressable style={styles.messageCard} onPress={() => router.push(`/messages/${item.id}`)}>
-            <View style={styles.avatarContainer}>
-                <Ionicons name="person-outline" size={32} color="#aaa" />
-            </View>
-            <View style={styles.messageContent}>
-                <ThemedText style={styles.messageUserName}>{item.userName}</ThemedText>
-                <ThemedText style={styles.messageText} numberOfLines={2}>{item.text}</ThemedText>
-            </View>
-            <View style={styles.messageRightSide}>
-                <ThemedText style={styles.messageTime}>{item.time}</ThemedText>
-                <View style={styles.messageMiniItemImage}>
-                    <FontAwesome5 name="bicycle" size={18} color="#999" />
-                </View>
-            </View>
-        </Pressable>
-    );
-
-    // 获取当前“出品中”的红点数字标识数量
-    const listingCount = items.filter(item => item.status === 'listings').length;
 
     return (
         <View style={styles.mainWrapper}>
-            {/* 👈 完美干掉顶部的白色路径条 */}
             <Stack.Screen options={{ headerShown: false }} />
 
-            {/* 顶部标签栏 */}
             <View style={styles.topTabBar}>
-                <Pressable style={[styles.tabItemTop, activeTab === 'discover' && styles.tabItemActiveTop]} onPress={() => setActiveTab('discover')}>
-                    <Ionicons name="search" size={24} color="#000" />
-                    <ThemedText style={styles.tabLabelTop}>発見</ThemedText>
-                </Pressable>
-                <Pressable style={[styles.tabItemTop, activeTab === 'favorites' && styles.tabItemActiveTop]} onPress={() => setActiveTab('favorites')}>
-                    <Ionicons name="heart" size={24} color="#000" />
-                    <ThemedText style={styles.tabLabelTop}>気に入り</ThemedText>
-                </Pressable>
-                <Pressable style={[styles.tabItemTop, activeTab === 'listings' && styles.tabItemActiveTop]} onPress={() => setActiveTab('listings')}>
-                    <View style={styles.badgeWrapper}>
-                        <MaterialIcons name="assignment" size={24} color="#000" />
-                        {listingCount > 0 && (
-                            <View style={styles.badge}>
-                                <ThemedText style={styles.badgeText}>{listingCount}</ThemedText>
+                {(['discover', 'favorites', 'listings', 'messages'] as TabType[]).map((tab) => {
+                    const icons: Record<TabType, any> = {
+                        discover: 'search',
+                        favorites: 'heart',
+                        listings: 'assignment',
+                        messages: 'chatbox-ellipses'
+                    };
+                    const labels: Record<TabType, string> = {
+                        discover: '発見',
+                        favorites: '気に入り',
+                        listings: '出品中',
+                        messages: 'メッセージ'
+                    };
+                    const isMessage = tab === 'messages';
+                    const isListings = tab === 'listings';
+
+                    return (
+                        <Pressable
+                            key={tab}
+                            style={[styles.tabItemTop, activeTab === tab && styles.tabItemActiveTop]}
+                            onPress={() => setActiveTab(tab)}
+                        >
+                            <View style={styles.badgeWrapper}>
+                                {isListings ? (
+                                    <MaterialIcons name="assignment" size={24} color="#000" />
+                                ) : (
+                                    <Ionicons name={icons[tab]} size={24} color="#000" />
+                                )}
+                                {isMessage && globalUnreadCount > 0 && (
+                                    <View style={styles.badge}><ThemedText style={styles.badgeText}>{globalUnreadCount}</ThemedText></View>
+                                )}
                             </View>
-                        )}
-                    </View>
-                    <ThemedText style={styles.tabLabelTop}>出品中</ThemedText>
-                </Pressable>
-                <Pressable style={[styles.tabItemTop, activeTab === 'messages' && styles.tabItemActiveTop]} onPress={() => setActiveTab('messages')}>
-                    <View style={styles.badgeWrapper}><Ionicons name="chatbox-ellipses" size={24} color="#000" /><View style={styles.badge}><ThemedText style={styles.badgeText}>1</ThemedText></View></View>
-                    <ThemedText style={styles.tabLabelTop}>メッセージ</ThemedText>
-                </Pressable>
+                            <ThemedText style={styles.tabLabelTop}>{labels[tab]}</ThemedText>
+                        </Pressable>
+                    );
+                })}
             </View>
 
-            {/* 动态列表内容 */}
-            <FlatList
-                data={getFilteredData()}
-                renderItem={activeTab === 'messages' ? renderMessageItem : renderProductItem}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContainer}
-                ListHeaderComponent={
-                    activeTab === 'messages' ? (
-                        <View style={styles.messageHeaderTitleRow}>
-                            <ThemedText style={styles.messageTitleText}>メッセージ</ThemedText>
-                            <View style={styles.messageCountBadge}><ThemedText style={styles.messageCountBadgeText}>1</ThemedText></View>
+            {isFirstLoading ? (
+                <View style={styles.loadingCenter}>
+                    <ActivityIndicator size="large" color="#5B9E00" />
+                </View>
+            ) : (
+                <FlatList
+                    data={getFilteredData()}
+                    renderItem={activeTab === 'messages' ? renderMessageItem : renderProductItem}
+                    keyExtractor={(item, index) => item.id ? item.id.toString() : index.toString()}
+                    contentContainerStyle={styles.listContainer}
+                    refreshControl={
+                        <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={['#5B9E00']} tintColor="#5B9E00" />
+                    }
+                    ListHeaderComponent={
+                        activeTab === 'messages' ? (
+                            <View style={styles.messageHeaderTitleRow}>
+                                <ThemedText style={styles.messageTitleText}>メッセージ</ThemedText>
+                                {globalUnreadCount > 0 && (
+                                    <View style={styles.messageCountBadge}><ThemedText style={styles.messageCountBadgeText}>{globalUnreadCount}</ThemedText></View>
+                                )}
+                            </View>
+                        ) : null
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <Ionicons name="file-tray-outline" size={48} color="#999" />
+                            <ThemedText style={styles.emptyText}>
+                                {activeTab === 'discover' && '現在表示できる商品はありません'}
+                                {activeTab === 'favorites' && 'お気に入りに登録された商品はありません'}
+                                {activeTab === 'listings' && '現在出品中の商品はありません'}
+                                {activeTab === 'messages' && 'メッセージはまだありません'}
+                            </ThemedText>
                         </View>
-                    ) : null
-                }
-            />
+                    }
+                />
+            )}
 
-            {/* 保持原结构不变，通过底部的 styles 强行钉在屏幕最前线不动 */}
             {activeTab !== 'messages' && (
                 <Pressable style={styles.centerListingButton} onPress={() => router.push('/reuse/create')}>
                     <MaterialIcons name="add" size={20} color="#444" />
@@ -190,330 +458,203 @@ export default function ReuseScreen() {
                 </Pressable>
             )}
 
-            {/* ================= 全局绿色底部选项卡菜单栏 ================= */}
             <View style={styles.tabBarContainer}>
                 <View style={styles.scanBackgroundCircle} />
                 <View style={styles.tabBarBackground} />
-
                 <View style={styles.tabBarContent}>
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/dashboard')}>
-                        <Octicons name="home" size={24} color="#555" />
-                        <ThemedText style={styles.tabLabelBottom}>ホーム</ThemedText>
-                    </Pressable>
-
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/calendar')}>
-                        <FontAwesome5 name="calendar-alt" size={22} color="#555" />
-                        <ThemedText style={styles.tabLabelBottom}>ゴミカレンダー</ThemedText>
-                    </Pressable>
-
-                    <View style={styles.scanWrapper}>
-                        <Pressable style={styles.scanButton} onPress={() => router.push('/scan')}>
-                            <Ionicons name="scan-outline" size={26} color="#555" />
-                        </Pressable>
-                        <ThemedText style={styles.scanLabel}>ゴミスキャン</ThemedText>
-                    </View>
-
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/reuse')}>
-                        <Ionicons name="refresh-circle" size={26} color="#5B9E00" />
-                        <ThemedText style={[styles.tabLabelBottom, styles.tabLabelBottomActive]}>リユース</ThemedText>
-                    </Pressable>
-
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/mypage')}>
-                        <Ionicons name="person" size={22} color="#555" />
-                        <ThemedText style={styles.tabLabelBottom}>マイページ</ThemedText>
-                    </Pressable>
+                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/dashboard')}><Octicons name="home" size={24} color="#555" /><ThemedText style={styles.tabLabelBottom}>ホーム</ThemedText></Pressable>
+                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/calendar')}><FontAwesome5 name="calendar-alt" size={22} color="#555" /><ThemedText style={styles.tabLabelBottom}>ゴミカレンダー</ThemedText></Pressable>
+                    <View style={styles.scanWrapper}><Pressable style={styles.scanButton} onPress={() => router.push('/scan')}><Ionicons name="scan-outline" size={26} color="#555" /></Pressable><ThemedText style={styles.scanLabel}>ゴミスキャン</ThemedText></View>
+                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/reuse')}><Ionicons name="refresh-circle" size={26} color="#5B9E00" /><ThemedText style={[styles.tabLabelBottom, styles.tabLabelBottomActive]}>リユース</ThemedText></Pressable>
+                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/mypage')}><Ionicons name="person" size={22} color="#555" /><ThemedText style={styles.tabLabelBottom}>マイページ</ThemedText></Pressable>
                 </View>
             </View>
+
+            <Modal transparent={true} visible={isModalVisible} animationType="fade" onRequestClose={() => setIsModalVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <View style={styles.modalIconCircle}><Feather name="alert-triangle" size={28} color="#FF4D4F" /></View>
+                        <ThemedText style={styles.modalTitle}>
+                            {modalMode === 'delete_listing' ? '出品の削除' : 'チャットの削除'}
+                        </ThemedText>
+                        <ThemedText style={styles.modalDescription}>
+                            {modalMode === 'delete_listing'
+                                ? `「${selectedTitle}」の出品を取り消しますか？\nこの操作は取り消せません。`
+                                : `「${selectedTitle}」さんとのチャット履歴を削除しますか？\nこの操作は取り消せません。`
+                            }
+                        </ThemedText>
+                        <View style={styles.modalButtonRow}>
+                            <Pressable style={[styles.modalButton, styles.modalCancelButton]} onPress={() => setIsModalVisible(false)}><ThemedText style={styles.modalCancelButtonText}>キャンセル</ThemedText></Pressable>
+                            <Pressable style={[styles.modalButton, styles.modalDeleteButton]} onPress={handleConfirmDelete}><ThemedText style={styles.modalDeleteButtonText}>削除する</ThemedText></Pressable>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    mainWrapper: {
-        flex: 1,
-        backgroundColor: '#F2F2F2',
-    },
-    topTabBar: {
-        flexDirection: 'row',
-        backgroundColor: '#D6E4D0',
-        paddingTop: 50,
-        paddingBottom: 10,
-        justifyContent: 'space-around',
-        alignItems: 'center',
-    },
-    tabItemTop: {
-        alignItems: 'center',
-        paddingVertical: 6,
-        width: '22%',
-        borderBottomWidth: 3,
-        borderBottomColor: 'transparent',
-    },
-    tabItemActiveTop: {
-        borderBottomColor: '#000000',
-    },
-    tabLabelTop: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#000',
-        marginTop: 4,
-    },
-    badgeWrapper: {
-        position: 'relative',
-    },
-    badge: {
-        position: 'absolute',
-        top: -4,
-        right: -8,
-        backgroundColor: '#FF3B30',
-        borderRadius: 8,
-        width: 16,
-        height: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    badgeText: {
-        color: '#FFF',
-        fontSize: 10,
-        fontWeight: 'bold',
-    },
-    listContainer: {
-        padding: 16,
-        // 👈 改为 180，列表滚动到最下面时会留出一块完美空白，让最底下的物资卡片不被出品按钮挡住
-        paddingBottom: 180,
-    },
-    itemCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 12,
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    imageContainer: {
-        position: 'relative',
-    },
-    imagePlaceholder: {
-        width: 100,
-        height: 100,
-        backgroundColor: '#EAE6DF',
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    imageInnerHeart: {
-        position: 'absolute',
-        top: 6,
-        right: 6,
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 4,
-    },
-    itemInfo: {
-        flex: 1,
-        marginLeft: 16,
-        justifyContent: 'center',
-    },
-    itemTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 8,
-    },
-    itemDetail: {
-        fontSize: 13,
-        color: '#666',
-        marginBottom: 4,
-    },
-    rightHeartButton: {
-        padding: 12,
-    },
-    rightDeleteButton: {
-        width: 44,
-        height: 44,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: 22,
-        marginRight: 4,
-    },
-    deleteButtonPressed: {
-        backgroundColor: '#FFEBEB',
-    },
-    centerListingButton: {
-        // ====== 🛠️ 核心修改：绝对定位悬浮，并给极高的 zIndex 层级防止被底座菜单遮挡 ======
-        position: 'absolute',
-        bottom: 115,                       // 👈 精准定位在底座选项卡（95px）的上面一点点
-        left: 16,                          // 👈 设为 16 与卡片左侧对齐
-        right: 16,                         // 👈 设为 16 与卡片右侧对齐，自适应撑满横向宽度
-        zIndex: 9999,                      // 👈 逼上最顶层，不被任何卡片或底部栏覆盖
-        elevation: 5,                      // 安卓端防遮挡强制提升层级
+    mainWrapper: { flex: 1, backgroundColor: '#F4F5F7' }, // 微调背景为轻微的高级冷灰色，凸显白色卡片
+    topTabBar: { flexDirection: 'row', backgroundColor: '#D6E4D0', paddingTop: 50, paddingBottom: 10, justifyContent: 'space-around', alignItems: 'center' },
+    tabItemTop: { alignItems: 'center', paddingVertical: 6, width: '22%', borderBottomWidth: 3, borderBottomColor: 'transparent' },
+    tabItemActiveTop: { borderBottomColor: '#000000' },
+    tabLabelTop: { fontSize: 12, fontWeight: 'bold', color: '#000', marginTop: 4 },
+    badgeWrapper: { position: 'relative' },
+    badge: { position: 'absolute', top: -4, right: -8, backgroundColor: '#FF3B30', borderRadius: 8, width: 16, height: 16, justifyContent: 'center', alignItems: 'center' },
+    badgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
+    listContainer: { padding: 16, paddingBottom: 180 },
+    itemCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+    imageContainer: { position: 'relative' },
+    imagePlaceholder: { width: 100, height: 100, backgroundColor: '#EAE6DF', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    productImage: { width: 100, height: 100, borderRadius: 12, backgroundColor: '#EAE6DF' },
+    itemInfo: { flex: 1, marginLeft: 16, justifyContent: 'center' },
+    itemTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 8 },
+    itemDetail: { fontSize: 13, color: '#666', marginBottom: 4 },
+    rightHeartButton: { padding: 12 },
+    rightDeleteButton: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22, marginRight: 4 },
+    centerListingButton: { position: 'absolute', bottom: 115, left: 16, right: 16, zIndex: 9999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(235, 233, 222, 0.95)', paddingVertical: 12, borderRadius: 24, borderWidth: 1, borderColor: '#DDD' },
+    centerListingButtonText: { fontSize: 15, fontWeight: 'bold', color: '#444', marginLeft: 6 },
+    messageHeaderTitleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: 20 },
+    messageTitleText: { fontSize: 28, fontWeight: 'bold' },
+    messageCountBadge: { backgroundColor: '#FF3B30', borderRadius: 12, paddingHorizontal: 8, marginLeft: 10 },
+    messageCountBadgeText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
 
-        // ====== ✨ 100% 完整保留你原本精美的设计样式，尺寸无变动 ======
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(235, 233, 222, 0.95)',
-        paddingVertical: 12,
-        borderRadius: 24,
-        borderWidth: 1,
-        borderColor: '#DDD',
-
-        // 加点立体悬浮阴影，划过去时视觉效果更好
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-    },
-    centerListingButtonText: {
-        fontSize: 15,
-        fontWeight: 'bold',
-        color: '#444',
-        marginLeft: 6,
-    },
-    messageHeaderTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 10,
-        marginBottom: 20,
-    },
-    messageTitleText: {
-        fontSize: 28,
-        fontWeight: 'bold',
-    },
-    messageCountBadge: {
-        backgroundColor: '#FF3B30',
-        borderRadius: 12,
-        paddingHorizontal: 8,
-        marginLeft: 10,
-    },
-    messageCountBadgeText: {
-        color: '#FFF',
-        fontSize: 14,
-        fontWeight: 'bold',
+    // 🌟 【重构样式部分：消息气泡一体化卡片体系】
+    messageCardWrapper: {
+        marginBottom: 12,
+        width: '100%'
     },
     messageCard: {
-        backgroundColor: '#F3EFE4',
+        backgroundColor: '#FFF',
         borderRadius: 20,
-        padding: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16,
+        // 添加高级弥散轻阴影
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.03,
+        shadowRadius: 8,
+        elevation: 2
     },
     avatarContainer: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#FFF',
+        position: 'relative',
+        width: 50,
+        height: 50,
+    },
+    avatarInnerCircle: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#EDF2F7', // 优雅淡灰色背景
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#CCC',
+        borderColor: '#E2E8F0',
+    },
+    miniDotBadge: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        width: 11,
+        height: 11,
+        borderRadius: 5.5,
+        backgroundColor: '#FF3B30',
+        borderWidth: 1.5,
+        borderColor: '#FFF'
     },
     messageContent: {
         flex: 1,
-        marginLeft: 16,
+        marginLeft: 14,
+        marginRight: 10,
+        justifyContent: 'center'
+    },
+    messageUpperRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        marginBottom: 5
     },
     messageUserName: {
-        fontSize: 15,
-        fontWeight: '600',
-    },
-    messageText: {
-        fontSize: 13,
-        color: '#555',
-    },
-    messageRightSide: {
-        alignItems: 'flex-end',
-        justifyContent: 'space-between',
-        height: 64,
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#2D3748',
+        flex: 1,
+        marginRight: 8
     },
     messageTime: {
         fontSize: 11,
-        color: '#666',
+        color: '#A0AEC0',
+        fontWeight: '500'
+    },
+    messageText: {
+        fontSize: 13,
+        color: '#718096',
+        lineHeight: 18
+    },
+    unreadMessageText: {
+        fontWeight: '700',
+        color: '#1A202C'
+    },
+
+    // 右侧联动整合区
+    messageRightActionSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+    },
+    messageMiniItemImageWrapper: {
+        width: 44,
+        height: 44,
+        backgroundColor: '#F7FAFC',
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
     },
     messageMiniItemImage: {
         width: 44,
-        height: 44,
-        backgroundColor: '#FFF',
-        borderRadius: 6,
+        height: 44
+    },
+    inlineRoomDeleteButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#FFF5F5', // 轻粉底色，消除边缘突兀感
         justifyContent: 'center',
         alignItems: 'center',
+        marginLeft: 12,
+        borderWidth: 0.5,
+        borderColor: '#FED7D7'
     },
-    tabBarContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 95,
-        justifyContent: 'flex-end',
-    },
-    tabBarBackground: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 70,
-        backgroundColor: '#D1E0C5',
-        zIndex: 1,
-    },
-    scanBackgroundCircle: {
-        position: 'absolute',
-        bottom: 30,
-        alignSelf: 'center',
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        backgroundColor: '#D1E0C5',
-        zIndex: 1,
-    },
-    tabBarContent: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'flex-end',
-        paddingBottom: 5,
-        height: 95,
-        zIndex: 2,
-    },
-    tabItemBottom: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-        height: 60,
-    },
-    tabLabelBottom: {
-        fontSize: 9,
-        color: '#555',
-        marginTop: 4,
-        fontWeight: '600',
-        textAlign: 'center',
-    },
-    tabLabelBottomActive: {
-        color: '#5B9E00',
-        fontWeight: 'bold',
-    },
-    scanWrapper: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-        height: 95,
-    },
-    scanButton: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-        marginBottom: 2,
-    },
-    scanLabel: {
-        fontSize: 9,
-        color: '#555',
-        marginTop: 2,
-        fontWeight: '700',
-        textAlign: 'center',
-    },
+
+    // 基础底层通用组件样式保持原样
+    tabBarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 95, justifyContent: 'flex-end' },
+    tabBarBackground: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 70, backgroundColor: '#D1E0C5', zIndex: 1 },
+    scanBackgroundCircle: { position: 'absolute', bottom: 30, alignSelf: 'center', width: 72, height: 72, borderRadius: 36, backgroundColor: '#D1E0C5', zIndex: 1 },
+    tabBarContent: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingBottom: 5, height: 95, zIndex: 2 },
+    tabItemBottom: { alignItems: 'center', justifyContent: 'center', flex: 1, height: 60 },
+    tabLabelBottom: { fontSize: 9, color: '#555', marginTop: 4, fontWeight: '600', textAlign: 'center' },
+    tabLabelBottomActive: { color: '#5B9E00', fontWeight: 'bold' },
+    scanWrapper: { alignItems: 'center', justifyContent: 'center', flex: 1, height: 95 },
+    scanButton: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+    scanLabel: { fontSize: 9, color: '#555', marginTop: 2, fontWeight: '700', textAlign: 'center' },
+    loadingCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
+    emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
+    emptyText: { marginTop: 12, fontSize: 14, color: '#999' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.45)', justifyContent: 'center', alignItems: 'center' },
+    modalCard: { width: '80%', maxWidth: 320, backgroundColor: '#FFFFFF', borderRadius: 24, paddingTop: 28, paddingBottom: 24, paddingHorizontal: 24, alignItems: 'center' },
+    modalIconCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFF2F0', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+    modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#222', marginBottom: 10, textAlign: 'center' },
+    modalDescription: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+    modalButtonRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-between' },
+    modalButton: { flex: 1, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginHorizontal: 6 },
+    modalCancelButton: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#EAEAEA' },
+    modalCancelButtonText: { fontSize: 14, fontWeight: '600', color: '#666' },
+    modalDeleteButton: { backgroundColor: '#FF4D4F' },
+    modalDeleteButtonText: { fontSize: 14, fontWeight: 'bold', color: '#FFFFFF' },
 });

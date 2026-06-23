@@ -1,56 +1,205 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     StyleSheet, View, Pressable, TextInput,
-    ScrollView, Image, Alert, KeyboardAvoidingView, Platform
+    ScrollView, Image, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Animated
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '@/lib/supabase'; // 🔐 引入你的 Supabase 客户端
 
 export default function CreateListingScreen() {
     const router = useRouter();
 
     // --- 表单状态 ---
-    const [images, setImages] = useState<string[]>([]); // 存储选中的图片URI
+    const [images, setImages] = useState<string[]>([]); // 存储选中的本地图片URI
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [station, setStation] = useState('');
-    const [quality, setQuality] = useState('');
 
-    // --- 选择图片逻辑 ---
-    const pickImage = async () => {
-        // 请求权限
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert('抱歉', '我们需要相册权限来上传照片');
-            return;
-        }
+    // 品质固定档位选项
+    const qualityOptions = [
+        '新品同様',
+        '未使用に近い',
+        '目立った傷なし',
+        '傷や汚れあり'
+    ];
+    const [quality, setQuality] = useState('未使用に近い');
 
-        // 打开选择器
-        let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.7,
+    const [isSubmitting, setIsSubmitting] = useState(false); // ⏳ 上传状态控制
+
+    // --- 动画提示框状态 ---
+    const [toastMessage, setToastMessage] = useState('');
+    const [showToast, setShowToast] = useState(false);
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    // --- 触发漂亮轻量级提示窗口的方法 ---
+    const triggerToast = (message: string, callback?: () => void) => {
+        setToastMessage(message);
+        setShowToast(true);
+
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 350,
+            useNativeDriver: true,
+        }).start(() => {
+            setTimeout(() => {
+                Animated.timing(fadeAnim, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                }).start(() => {
+                    setShowToast(false);
+                    if (callback) callback();
+                });
+            }, 1500);
         });
+    };
 
-        if (!result.canceled) {
-            setImages([...images, result.assets[0].uri]);
+    // 📸 动作 A：调用相机拍照
+    const takePhoto = async () => {
+        try {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('エラー', '写真を撮影するにはカメラへのアクセス権限が必要です。');
+                return;
+            }
+
+            let result = await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.6,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setImages([...images, result.assets[0].uri]);
+            }
+        } catch (err) {
+            console.error("相机启动失败:", err);
+            triggerToast("⚠️ カメラを起動できませんでした");
         }
     };
 
-    // --- 提交逻辑 ---
-    const handleSubmit = () => {
+    // 🖼️ 动作 B：从相册选图
+    const pickImageFromLibrary = async () => {
+        try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('エラー', '画像を選択するには写真へのアクセス権限が必要です。');
+                return;
+            }
+
+            let result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.6,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setImages([...images, result.assets[0].uri]);
+            }
+        } catch (err) {
+            console.error("相册启动失败:", err);
+            triggerToast("⚠️ アルバムを開けませんでした");
+        }
+    };
+
+    // --- 删除某张已选照片 ---
+    const removeImage = (indexToRemove: number) => {
+        setImages(images.filter((_, index) => index !== indexToRemove));
+    };
+
+    // --- 🌍 将本地图片 URI 转换并上传到 Supabase Storage ---
+    const uploadImagesToStorage = async (localUris: string[]): Promise<string[]> => {
+        const uploadedUrls: string[] = [];
+
+        for (const uri of localUris) {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) throw new Error('ユーザーがログインしていません');
+
+                const response = await fetch(uri);
+                const blob = await response.blob();
+
+                const fileExt = uri.split('.').pop() || 'jpg';
+                const randomStr = Math.random().toString(36).substring(7);
+                const fileName = `${user.id}/${Date.now()}-${randomStr}.${fileExt}`;
+                const filePath = `${fileName}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('item-images')
+                    .upload(filePath, blob, { contentType: `image/${fileExt}` });
+
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('item-images')
+                    .getPublicUrl(filePath);
+
+                uploadedUrls.push(publicUrl);
+            } catch (error: any) {
+                console.error('图片上传失败详情: ', error);
+                throw new Error(`画像のアップロードに失敗しました: ${error.message || error}`);
+            }
+        }
+
+        return uploadedUrls;
+    };
+
+    // --- 💾 核心提交逻辑 ---
+    const handleSubmit = async () => {
         if (!title || !description || images.length === 0) {
-            Alert.alert('提示', '请至少上传一张照片并填写标题和说明');
+            triggerToast('⚠️ 画像、タイトル、紹介を入力してください');
             return;
         }
 
-        // 这里通常是调用你的后端API
-        Alert.alert('成功', '物品已提交出品！', [
-            { text: '确定', onPress: () => router.back() }
-        ]);
+        setIsSubmitting(true);
+
+        try {
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            if (userError || !user) {
+                Alert.alert('エラー', 'ログインセッションが切れました。再度ログインしてください。');
+                return;
+            }
+
+            const remoteImageUrls = await uploadImagesToStorage(images);
+
+            const { error: insertError } = await supabase
+                .from('items')
+                .insert([
+                    {
+                        user_id: user.id,
+                        title: title,
+                        description: description,
+                        station: station || null,
+                        quality: quality,
+                        images: remoteImageUrls,
+                        status: 'available'
+                    }
+                ]);
+
+            if (insertError) throw insertError;
+
+            triggerToast('🎉 出品が完了しました！', () => {
+                setTitle('');
+                setDescription('');
+                setStation('');
+                setImages([]);
+                if (router.canGoBack()) {
+                    router.back();
+                } else {
+                    router.replace('/reuse');
+                }
+            });
+
+        } catch (error: any) {
+            console.error(error);
+            Alert.alert('出品失敗', error.message || 'エラーが発生しました。もう一度お試しください。');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -60,21 +209,42 @@ export default function CreateListingScreen() {
         >
             {/* 顶部返回导航 */}
             <View style={styles.header}>
-                <Pressable onPress={() => router.back()} style={styles.backButton}>
+                <Pressable
+                    onPress={() => router.canGoBack() ? router.back() : router.replace('/reuse')}
+                    style={styles.backButton}
+                >
                     <Ionicons name="chevron-back" size={28} color="#000" />
                 </Pressable>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
 
-                {/* 1. 图片上传区域 */}
+                {/* ✨ 优化升级 1：摒弃隐式弹窗，将“拍照”和“相册选择”做成两个独立直观的 UI 卡片 */}
+                <View style={styles.imageSectionTextRow}>
+                    <ThemedText style={styles.rowLabelText}>商品の画像（必須）</ThemedText>
+                </View>
+
                 <View style={styles.imageSection}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         {images.map((uri, index) => (
-                            <Image key={index} source={{ uri }} style={styles.uploadedImage} />
+                            <View key={index} style={styles.imageWrapper}>
+                                <Image source={{ uri }} style={styles.uploadedImage} />
+                                <Pressable style={styles.deleteBadge} onPress={() => removeImage(index)}>
+                                    <Ionicons name="close-circle" size={22} color="#FF4D4F" />
+                                </Pressable>
+                            </View>
                         ))}
-                        <Pressable style={styles.addImageButton} onPress={pickImage}>
-                            <MaterialIcons name="add" size={40} color="#666" />
+
+                        {/* 📸 常驻卡片 A：拍照 */}
+                        <Pressable style={styles.addImageButton} onPress={takePhoto} disabled={isSubmitting}>
+                            <MaterialIcons name="photo-camera" size={30} color="#5B9E00" />
+                            <ThemedText style={styles.addImageButtonText}>写真を撮る</ThemedText>
+                        </Pressable>
+
+                        {/* 🖼️ 常驻卡片 B：相册 */}
+                        <Pressable style={[styles.addImageButton, { marginLeft: 12 }]} onPress={pickImageFromLibrary} disabled={isSubmitting}>
+                            <MaterialIcons name="collections" size={30} color="#007AFF" />
+                            <ThemedText style={styles.addImageButtonText}>アルバム</ThemedText>
                         </Pressable>
                     </ScrollView>
                 </View>
@@ -86,49 +256,89 @@ export default function CreateListingScreen() {
                     value={title}
                     onChangeText={setTitle}
                     placeholderTextColor="#999"
+                    editable={!isSubmitting}
                 />
 
                 {/* 3. 说明输入 */}
                 <TextInput
                     style={[styles.titleInput, styles.descInput]}
-                    placeholder="簡単な紹介"
+                    placeholder="商品の状態、購入時期、お渡し方法など"
                     multiline
                     numberOfLines={6}
                     value={description}
                     onChangeText={setDescription}
                     textAlignVertical="top"
                     placeholderTextColor="#999"
+                    editable={!isSubmitting}
                 />
 
-                {/* 4. 最寄り駅 & 品質 (行布局) */}
+                {/* 4. 最寄り駅输入 */}
                 <View style={styles.rowInputContainer}>
                     <ThemedText style={styles.rowLabel}>最寄り駅</ThemedText>
                     <TextInput
                         style={styles.rowInput}
                         value={station}
                         onChangeText={setStation}
+                        placeholder="例：新宿駅"
+                        placeholderTextColor="#BBB"
+                        editable={!isSubmitting}
                     />
                 </View>
 
-                <View style={styles.rowInputContainer}>
-                    <ThemedText style={styles.rowLabel}>品質</ThemedText>
-                    <TextInput
-                        style={styles.rowInput}
-                        value={quality}
-                        onChangeText={setQuality}
-                    />
+                {/* 5. 品质胶囊单选面板区域 */}
+                <View style={styles.qualitySectionContainer}>
+                    <ThemedText style={styles.rowLabelText}>商品の状態（品質）</ThemedText>
+                    <View style={styles.qualityBadgeRow}>
+                        {qualityOptions.map((option) => {
+                            const isSelected = quality === option;
+                            return (
+                                <Pressable
+                                    key={option}
+                                    style={[
+                                        styles.qualityCapsule,
+                                        isSelected && styles.qualityCapsuleActive
+                                    ]}
+                                    onPress={() => !isSubmitting && setQuality(option)}
+                                >
+                                    <ThemedText style={[
+                                        styles.qualityCapsuleText,
+                                        isSelected && styles.qualityCapsuleTextActive
+                                    ]}>
+                                        {option}
+                                    </ThemedText>
+                                </Pressable>
+                            );
+                        })}
+                    </View>
                 </View>
 
-                {/* 5. 提交按钮 */}
+                {/* 6. 提交按钮 */}
                 <Pressable
-                    style={[styles.submitButton, (!title || images.length === 0) && styles.submitButtonDisabled]}
+                    style={[
+                        styles.submitButton,
+                        (!title || images.length === 0 || isSubmitting) && styles.submitButtonDisabled
+                    ]}
                     onPress={handleSubmit}
+                    disabled={isSubmitting}
                 >
-                    <MaterialIcons name="add" size={20} color="#999" />
-                    <ThemedText style={styles.submitButtonText}>出品する</ThemedText>
+                    {isSubmitting ? (
+                        <ActivityIndicator size="small" color="#666" />
+                    ) : (
+                        <>
+                            <MaterialIcons name="add" size={20} color="#666" />
+                            <ThemedText style={styles.submitButtonText}>出品する</ThemedText>
+                        </>
+                    )}
                 </Pressable>
 
             </ScrollView>
+
+            {/* 自定义轻量提示 */}
+            {showToast && (
+                <Animated.View style={[styles.toastContainer, { opacity: fadeAnim }]}>
+                    <ThemedText style={styles.toastText}>{toastMessage}</ThemedText>
+                </Animated.View>
+            )}
         </KeyboardAvoidingView>
     );
 }
@@ -152,30 +362,48 @@ const styles = StyleSheet.create({
         paddingHorizontal: 30,
         paddingBottom: 50,
     },
-    // 图片区域样式
+    imageSectionTextRow: {
+        marginTop: 10,
+        marginBottom: 8,
+    },
     imageSection: {
         flexDirection: 'row',
         marginBottom: 30,
-        marginTop: 10,
+    },
+    imageWrapper: {
+        position: 'relative',
+        marginRight: 12,
     },
     uploadedImage: {
-        width: 120,
-        height: 120,
+        width: 110,
+        height: 110,
         borderRadius: 12,
-        marginRight: 15,
+    },
+    deleteBadge: {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+        backgroundColor: '#FFF',
+        borderRadius: 11,
+        zIndex: 10,
     },
     addImageButton: {
-        width: 120,
-        height: 120,
-        backgroundColor: '#EAEAEA',
+        width: 110,
+        height: 110,
+        backgroundColor: '#FFFFFF',
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#DDD',
+        borderWidth: 1.5,
+        borderColor: '#E0E0E0',
         borderStyle: 'dashed',
+        gap: 6,
     },
-    // 输入框通用样式
+    addImageButtonText: {
+        fontSize: 12,
+        color: '#555',
+        fontWeight: '600',
+    },
     titleInput: {
         backgroundColor: '#FFF',
         borderRadius: 8,
@@ -191,44 +419,105 @@ const styles = StyleSheet.create({
     descInput: {
         height: 150,
     },
-    // 行布局样式
     rowInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 24,
     },
     rowLabel: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: 'bold',
-        width: 100,
+        width: 90,
         color: '#333',
     },
     rowInput: {
         flex: 1,
-        backgroundColor: '#EEE',
+        backgroundColor: '#FFF',
         borderRadius: 8,
         height: 45,
         paddingHorizontal: 15,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
     },
-    // 提交按钮
+    qualitySectionContainer: {
+        marginBottom: 20,
+        marginTop: 10,
+    },
+    rowLabelText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 12,
+    },
+    qualityBadgeRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    qualityCapsule: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    qualityCapsuleActive: {
+        backgroundColor: '#5B9E00',
+        borderColor: '#5B9E00',
+    },
+    qualityCapsuleText: {
+        fontSize: 13,
+        color: '#666',
+        fontWeight: '500',
+    },
+    qualityCapsuleTextActive: {
+        color: '#FFFFFF',
+        fontWeight: 'bold',
+    },
     submitButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#EBE9DE',
         marginTop: 40,
-        paddingVertical: 12,
+        paddingVertical: 14,
         borderRadius: 25,
         borderWidth: 1,
         borderColor: '#DDD',
     },
     submitButtonDisabled: {
-        opacity: 0.6,
+        opacity: 0.5,
     },
     submitButtonText: {
         fontSize: 16,
         fontWeight: 'bold',
         color: '#666',
         marginLeft: 8,
+    },
+    toastContainer: {
+        position: 'absolute',
+        bottom: '45%',
+        left: '15%',
+        right: '15%',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 25,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 5,
+    },
+    toastText: {
+        color: '#FFF',
+        fontSize: 15,
+        fontWeight: '600',
+        textAlign: 'center',
     },
 });
