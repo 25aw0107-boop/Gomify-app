@@ -14,12 +14,15 @@ export default function RootLayout() {
         headerShown: false, 
       }}
     >
+      
       <Stack.Screen name="index" />
       <Stack.Screen name="dashboard" />
       <Stack.Screen name="scan" />
     </Stack>
   const colorScheme = useColorScheme();
 
+
+  
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
@@ -30,6 +33,7 @@ export default function RootLayout() {
         <Stack.Screen name="signin-email" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen name="address" options={{ headerShown: false }} />
         <Stack.Screen name="dashboard" options={{ headerShown: false }} />
+        
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
