@@ -144,7 +144,7 @@ export default function CalendarScreen() {
                 }
 
             } catch (err) {
-                console.error("初始化地址失败:", err);
+                console.error("エラーが発生しました:", err);
             } finally {
                 setLoading(false);
             }
@@ -412,7 +412,7 @@ export default function CalendarScreen() {
                 </View>
             </ScrollView>
 
-            {/* 导航栏保持原样 */}
+
             <View style={styles.tabBarContainer}>
                 <View style={styles.scanBackgroundCircle} />
                 <View style={styles.tabBarBackground} />
@@ -446,44 +446,312 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-    mainWrapper: { flex: 1, backgroundColor: '#F8F9FA' },
-    contentBody: { paddingTop: 18, paddingHorizontal: 20, paddingBottom: 140 },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 14, paddingHorizontal: 16, height: 50, marginTop: 20, marginBottom: 18, borderWidth: 1, borderColor: '#E0E0E0' },
-    searchIcon: { marginRight: 10 },
-    searchInput: { flex: 1, fontSize: 15, color: '#333' },
-    dropdownContainer: { backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 8, marginBottom: 18, borderWidth: 1, borderColor: '#E0E0E0', zIndex: 99, elevation: 5 },
-    dropdownItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
-    dropdownItemText: { fontSize: 14, color: '#333' },
-    headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-    headerTitleContainer: { alignItems: 'center', flex: 1 },
-    arrowButton: { padding: 8 },
-    monthTitleText: { fontSize: 24, fontWeight: 'bold', color: '#111' },
-    regionSubText: { fontSize: 12, color: '#666', marginTop: 4, textAlign: 'center' },
-    calendarCard: { backgroundColor: '#FFF', borderRadius: 20, paddingVertical: 18, paddingHorizontal: 12, borderWidth: 1, borderColor: '#E0E0E0' },
-    weekHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#EEEEEE' },
-    weekHeaderText: { fontSize: 14, fontWeight: '600', color: '#777', width: '14.28%', textAlign: 'center' },
-    gridContainer: { flexDirection: 'row', flexWrap: 'wrap' },
-    dateCell: { width: '14.28%', height: 72, justifyContent: 'flex-start', alignItems: 'center', paddingTop: 6, borderWidth: 0.5, borderColor: '#EEEEEE', borderRadius: 6, overflow: 'hidden', position: 'relative' },
-    cellBackgroundWrapper: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row' },
-    dateText: { fontSize: 12, color: '#444', marginBottom: 3, zIndex: 2 },
-    labelContainerInside: { flex: 1, flexDirection: 'row', gap: 3, justifyContent: 'center', alignItems: 'center', width: '100%', zIndex: 2 },
-    iconBadge: { alignItems: 'center', justifyContent: 'center' },
-    miniGridText: { fontSize: 9, fontWeight: 'bold', marginTop: 2 },
-    todayCell: { borderWidth: 3, borderColor: '#76C800' },
-    legendContainer: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, marginTop: 20, borderWidth: 1, borderColor: '#E0E0E0' },
-    legendSectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 16, textAlign: 'center' },
-    legendGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-    legendItem: { flexDirection: 'row', alignItems: 'center', width: '48%', marginBottom: 14 },
-    legendColorBox: { width: 28, height: 28, borderRadius: 7, marginRight: 10, alignItems: 'center', justifyContent: 'center' },
-    legendLabelText: { fontSize: 13, color: '#555', fontWeight: '500' },
-    tabBarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 95, zIndex: 10, justifyContent: 'flex-end' },
-    tabBarBackground: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 70, backgroundColor: '#D1E0C5', zIndex: 1 },
-    scanBackgroundCircle: { position: 'absolute', bottom: 30, alignSelf: 'center', width: 72, height: 72, borderRadius: 36, backgroundColor: '#D1E0C5', zIndex: 1 },
-    tabBarContent: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingBottom: 5, height: 95, zIndex: 2 },
-    tabItemBottom: { alignItems: 'center', justifyContent: 'center', flex: 1, height: 60 },
-    tabLabelBottom: { fontSize: 10, color: '#555', marginTop: 4, fontWeight: '600', textAlign: 'center' },
-    tabLabelBottomActive: { color: '#5B9E00', fontWeight: 'bold' },
-    scanWrapper: { alignItems: 'center', justifyContent: 'center', flex: 1, height: 95 },
-    scanButton: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 3, marginBottom: 2 },
-    scanLabel: { fontSize: 10, color: '#555', marginTop: 3, fontWeight: '700', textAlign: 'center' },
-});
+    mainWrapper: {
+        flex: 1,
+        backgroundColor: '#F8F9FA',
+    },
+
+    contentBody: {
+        paddingTop: 18,
+        paddingHorizontal: 20,
+        paddingBottom: 140,
+    },
+
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF',
+        borderRadius: 14,
+        paddingHorizontal: 16,
+        height: 50,
+        marginTop: 20,
+        marginBottom: 18,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+
+    searchIcon: {
+        marginRight: 10,
+    },
+
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        color: '#333',
+    },
+
+    dropdownContainer: {
+        backgroundColor: '#FFF',
+        borderRadius: 14,
+        paddingVertical: 8,
+        marginBottom: 18,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        zIndex: 99,
+        elevation: 5,
+    },
+
+    dropdownItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F5F5F5',
+    },
+
+    dropdownItemText: {
+        fontSize: 14,
+        color: '#333',
+    },
+
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 20,
+    },
+
+    headerTitleContainer: {
+        alignItems: 'center',
+        flex: 1,
+    },
+
+    arrowButton: {
+        padding: 8,
+    },
+
+    monthTitleText: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#111',
+    },
+
+    regionSubText: {
+        fontSize: 12,
+        color: '#666',
+        marginTop: 4,
+        textAlign: 'center',
+    },
+
+    calendarCard: {
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        paddingVertical: 18,
+        paddingHorizontal: 12,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+
+    weekHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 14,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEEEEE',
+    },
+
+    weekHeaderText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#777',
+        width: '14.28%',
+        textAlign: 'center',
+    },
+
+    gridContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+
+    dateCell: {
+        width: '14.28%',
+        height: 72,
+        justifyContent: 'flex-start',
+        alignItems: 'center',
+        paddingTop: 6,
+        borderWidth: 0.5,
+        borderColor: '#EEEEEE',
+        borderRadius: 6,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+
+    cellBackgroundWrapper: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        flexDirection: 'row',
+    },
+
+    dateText: {
+        fontSize: 12,
+        color: '#444',
+        marginBottom: 3,
+        zIndex: 2,
+    },
+
+    labelContainerInside: {
+        flex: 1,
+        flexDirection: 'row',
+        gap: 3,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
+        zIndex: 2,
+    },
+
+    iconBadge: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    miniGridText: {
+        fontSize: 9,
+        fontWeight: 'bold',
+        marginTop: 2,
+    },
+
+    todayCell: {
+        borderWidth: 3,
+        borderColor: '#76C800',
+    },
+
+    legendContainer: {
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        padding: 20,
+        marginTop: 20,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+
+    legendSectionTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 16,
+        textAlign: 'center',
+    },
+
+    legendGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+    },
+
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '48%',
+        marginBottom: 14,
+    },
+
+    legendColorBox: {
+        width: 28,
+        height: 28,
+        borderRadius: 7,
+        marginRight: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    legendLabelText: {
+        fontSize: 13,
+        color: '#555',
+        fontWeight: '500',
+    },
+
+   tabBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 95,
+    justifyContent: 'flex-end',
+},
+
+tabBarBackground: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 70,
+    backgroundColor: '#D1E0C5',
+    zIndex: 1,
+},
+
+scanBackgroundCircle: {
+    position: 'absolute',
+    bottom: 30,
+    alignSelf: 'center',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#D1E0C5',
+    zIndex: 1,
+},
+
+tabBarContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    paddingBottom: 5,
+    height: 95,
+    zIndex: 2,
+},
+
+tabItemBottom: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    height: 60,
+},
+
+tabLabelBottom: {
+    fontSize: 9,
+    color: '#555',
+    marginTop: 4,
+    fontWeight: '600',
+    textAlign: 'center',
+},
+
+tabLabelBottomActive: {
+    color: '#5B9E00',
+    fontWeight: 'bold',
+},
+
+scanWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    height: 95,
+},
+
+scanButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    marginBottom: 2,
+},
+
+scanLabel: {
+    fontSize: 9,
+    color: '#555',
+    marginTop: 2,
+    fontWeight: '700',
+    textAlign: 'center',
+},
+    });
+    
