@@ -1,224 +1,44 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Pressable, ScrollView, ActivityIndicator, TextInput } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
-import { Ionicons, FontAwesome5, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import { StyleSheet, View, Pressable, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons, FontAwesome5, Octicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
-import { supabase } from '@/config/supabase';
 
-
-const colorMap: Record<string, { id: number; color: string }> = {
-    '可燃ごみ': { id: 1, color: '#DC2626' }, 
-    '不燃ごみ': { id: 2, color: '#2563EB' }, 
-    '燃やすごみ': { id: 1, color: '#DC2626' }, 
-    '金属・陶器・ガラスごみ': { id: 3, color: '#2563EB' }, 
-    '資源': { id: 3, color: '#16A34A' }, 
-    '古紙': { id: 3, color: '#16A34A' }, 
-    '資源プラスチック': { id: 4, color: '#EAB308' }, 
-    'プラスチック': { id: 4, color: '#EAB308' }, 
-    'プラ': { id: 4, color: '#EAB308' },         
-    '容器包装プラスチック': { id: 4, color: '#EAB308' }, 
-    '金属・陶器・ガラス': { id: 2, color: '#2563EB' }, 
-    '燃やさないごみ': { id: 2, color: '#2563EB' }, 
-    '不燃小物類': { id: 2, color: '#2563EB' }, 
-    '燃えないごみ': { id: 2, color: '#2563EB' },
-'陶器・ガラス・金属ごみ': { id: 2, color: '#2563EB' },
-
-    
+// 新宿区垃圾分类规则颜色和图标
+const GARBAGE_TYPES = {
+    BURNABLE: { label: '燃えるゴミ (火・金)', color: '#EF4444', icon: 'flame' },
+    NON_BURNABLE: { label: '燃えないゴミ (第2・4土)', color: '#3B82F6', icon: 'close-circle-outline' },
+    PLASTIC: { label: 'プラスチック (木)', color: '#F59E0B', icon: 'recycle' },
 };
 
 export default function CalendarScreen() {
     const router = useRouter();
 
-    const [selectedAreaId, setSelectedAreaId] = useState<number>(9999); 
-    const [isCurrentChiyoda, setIsCurrentChiyoda] = useState<boolean>(true);
-    const [allAreas, setAllAreas] = useState<any[]>([]);
-    const [searchQuery, setSearchQuery] = useState<string>('');
-    const [showDropdown, setShowDropdown] = useState<boolean>(false);
+    // 模拟新宿区5月份日历数据：5月1日是周五（前面留5个空白位格）
+    const startDayOffset = 5;
+    const totalDays = 31;
 
-    const [areaName, setAreaName] = useState<string>('新宿区百人１丁目');
-    const [dbRules, setDbRules] = useState<any[]>([]); 
-    const [loading, setLoading] = useState(false);
+    // 新宿区规则逻辑：根据日期和星期计算该格子的颜色
+    const getDayColor = (day: number) => {
+        // 计算当前是星期几：1(Mon) - 7(Sun)
+        const weekDay = (day + startDayOffset - 1) % 7 || 7;
 
-    const [currentDate, setCurrentDate] = useState(new Date(2026, 5, 1));
+        // 1. 周二、周五：燃えるゴミ (红色)
+        if (weekDay === 2 || weekDay === 5) return GARBAGE_TYPES.BURNABLE.color;
+        // 2. 周四：塑料资源 (橙色)
+        if (weekDay === 4) return GARBAGE_TYPES.PLASTIC.color;
 
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const firstDayOfMonth = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-    const isFirstMonth = year === 2026 && month === 3; 
-    const isLastMonth = year === 2027 && month === 0;  
-
-    useEffect(() => {
-const fetchAreas = async () => {
-    try {
-        const { data, error } = await supabase
-            .from('areas')
-            .select('area_id, area_name_jp, ward_id')
-            .range(0, 2999);
-
-        if (error) {
-            console.error("Supabase-fel:", error.message);
-            return;
+        // 3. 第2和第4个周六：不燃垃圾 (蓝色)
+        const weekOfMonth = Math.ceil(day / 7);
+        if (weekDay === 6 && (weekOfMonth === 2 || weekOfMonth === 4)) {
+            return GARBAGE_TYPES.NON_BURNABLE.color;
         }
 
-        if (data) {
-  
-            const tokyoAreas = data.map(a => {
-                
-                let fullName = a.area_name_jp;
-
-                if (a.ward_id === 1 && !a.area_name_jp.includes('新宿区')) {
-                    fullName = `新宿区 ${a.area_name_jp}`;
-                }
-
-                return {
-                    id: a.area_id,
-                    name: fullName,      
-                    matchKey: fullName,   
-                    isChiyoda: false
-                };
-            });
-
-
-            const chiyodaArea = {
-                id: 9999,
-                name: '千代田区 (麹町一～六丁目の偶数番地・二番町・六番町)',
-                matchKey: '千代田区 千代田 chiyoda 麹町 二番町 六番町',
-                isChiyoda: true
-            };
-
-    
-            setAllAreas([chiyodaArea, ...tokyoAreas]);
-        }
-    } catch (err) {
-        console.error("Fel:", err);
-    }
-};
-
-    fetchAreas();
-}, []);
-
-   useEffect(() => {
-    const fetchRulesIfNeeded = async () => {
-        if (isCurrentChiyoda) {
-            setDbRules([]);
-            return;
-        }
-
-        setLoading(true);
-        try {
-      
-            const { data: areaRules, error } = await supabase
-                .from('collection_rules')
-                .select('*')
-                .eq('area_id', selectedAreaId); 
-
-            if (areaRules) {
-                setDbRules(areaRules);
-            }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
+        // 其他日子无收集，返回纯白背景
+        return '#FFFFFF';
     };
 
-    if (allAreas.length > 0) {
-        fetchRulesIfNeeded();
-    }
-}, [selectedAreaId, isCurrentChiyoda, allAreas]);
-
-
-    const goToPreviousMonth = () => {
-        if (year === 2026 && month > 3) {
-            setCurrentDate(new Date(year, month - 1, 1));
-        } else if (year === 2027 && month === 0) {
-            setCurrentDate(new Date(2026, 11, 1));
-        }
-    };
-
-    const goToNextMonth = () => {
-        if (year === 2026 && month < 11) {
-            setCurrentDate(new Date(year, month + 1, 1));
-        } else if (year === 2026 && month === 11) {
-            setCurrentDate(new Date(2027, 0, 1));
-        }
-    };
-
-    const getDayInfos = (currentYear: number, currentMonth: number, day: number) => {
-    const dateObj = new Date(currentYear, currentMonth, day);
-    const dayOfWeek = dateObj.getDay(); 
-
-
-    const jaWeekdays = ['日', '月', '火', '水', '木', '金', '土'];
-    const currentJaDay = jaWeekdays[dayOfWeek];
-
-    const matchingRules = dbRules.filter(rule => {
-        if (!rule.day_of_week) return false;
-     
-        return rule.day_of_week.includes(currentJaDay);
-    });
-    const uniqueRules = matchingRules.filter((rule, index, self) =>
-    index === self.findIndex((r) => r.garbage_type === rule.garbage_type)
-);
-
-   
-
-    return uniqueRules.map(rule => {
-        const rawType = rule.garbage_type ? String(rule.garbage_type) : '';
-    const cleanType = rawType.replace(/[\r\n\s\u3000]+/g, '');
-        console.log(`Försöker färglägga texten: >>>${cleanType}<<<`);
-        const typeInfo = colorMap[rule.garbage_type] || { id: 99, color: '#757575' };
-        return {
-            id: typeInfo.id,
-            color: typeInfo.color,
-            isTextWhite: true
-        };
-    });
-};
-
-
-
-    const renderGarbageIcon = (typeId: number, index: number) => {
-        if (typeId === 1) {
-            return (
-                <View key={index} style={styles.iconBadge}>
-                    <Ionicons name="flame-outline" size={14} color="#FFF" />
-                    <ThemedText style={[styles.miniGridText, {color: '#FFF'}]}>可燃</ThemedText>
-                </View>
-            );
-        }
-        if (typeId === 2) {
-            return (
-                <View key={index} style={styles.iconBadge}>
-                   
-                    <MaterialCommunityIcons name="fire-off" size={14} color="#FFF" />
-                    <ThemedText style={[styles.miniGridText, {color: '#FFF'}]}>不燃</ThemedText>
-                </View>
-            );
-        }
-        if (typeId === 3) {
-            return (
-                <View key={index} style={styles.iconBadge}>
-                
-                    <Ionicons name="newspaper-outline" size={14} color="#FFF" />
-                    <ThemedText style={[styles.miniGridText, {color: '#FFF'}]}>資源</ThemedText>
-                </View>
-            );
-        }
-        if (typeId === 4) {
-            return (
-                <View key={index} style={styles.iconBadge}>
-                    <Ionicons name="cube-outline" size={13} color="#FFF" />
-                    <ThemedText style={[styles.miniGridText, {color: '#FFF'}]}>プラ</ThemedText>
-                </View>
-            );
-        }
-        if (typeId === 5) return <ThemedText key={index} style={{fontSize: 9, color: '#FFF', fontWeight: 'bold'}}>休み</ThemedText>;
-        return null;
-    };
-
+    // 渲染完整的日历格子矩阵
     const renderCalendarGrid = () => {
         const gridCells = [];
         const today = new Date();
@@ -227,25 +47,24 @@ const fetchAreas = async () => {
             gridCells.push(<View key={`empty-${i}`} style={styles.dateCell} />);
         }
 
-        for (let d = 1; d <= daysInMonth; d++) {
-            const dayInfos = getDayInfos(year, month, d);
-            const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-            const hasEvents = dayInfos.length > 0;
-            const isTextWhite = hasEvents; 
+        // 2. 渲染1号到31号的真实日期
+        for (let d = 1; d <= totalDays; d++) {
+            const bgColor = getDayColor(d);
+            const isToday = d === 15; // 结合你主页显示的“明日5/16”，今天假设是5/15
 
             gridCells.push(
-                <View key={`day-${d}`} style={[ styles.dateCell, isToday && styles.todayCell ]}>
-                    
-                    <View style={styles.cellBackgroundWrapper}>
-                        {dayInfos.map((info, index) => (
-                            <View key={index} style={{ flex: 1, backgroundColor: info.color }} />
-                        ))}
-                    </View>
-
+                <View
+                    key={`day-${d}`}
+                    style={[
+                        styles.dateCell,
+                        { backgroundColor: bgColor },
+                        isToday && styles.todayCell
+                    ]}
+                >
                     <ThemedText style={[
-                        styles.dateText, 
-                        isTextWhite && { color: '#FFF', fontWeight: 'bold' },
-                        isToday && !hasEvents && { color: '#76C800', fontWeight: 'bold' }
+                        styles.dateText,
+                        bgColor !== '#FFFFFF' && { color: '#FFF', fontWeight: 'bold' },
+                        isToday && { color: bgColor === '#FFFFFF' ? '#5B9E00' : '#FFF' }
                     ]}>
                         {d}
                     </ThemedText>
@@ -266,59 +85,13 @@ const fetchAreas = async () => {
 
     return (
         <View style={styles.mainWrapper}>
-            <Stack.Screen options={{ headerShown: false }} />
+            {/* 页面主内容区域，加上 ScrollView 防止未来数据多时产生溢出 */}
             <ScrollView contentContainerStyle={styles.contentBody}>
-                
-                <View style={styles.searchContainer}>
-                    <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="区名や地域名で検索 (例: 渋谷区 上原, 笹塚)"
-                        placeholderTextColor="#999"
-                        value={searchQuery}
-                        onChangeText={(text) => {
-                            setSearchQuery(text);
-                            setShowDropdown(text.length > 0);
-                        }}
-                    />
-                </View>
 
-                {showDropdown && (
-                    <View style={styles.dropdownContainer}>
-                        {filteredAreas.length > 0 ? (
-                            filteredAreas.map(area => (
-                                <Pressable key={`${area.id}-${area.isChiyoda}`} style={styles.dropdownItem} onPress={() => {
-                                    setSelectedAreaId(area.id);
-                                    setIsCurrentChiyoda(area.isChiyoda);
-                                    setAreaName(area.name);
-                                    setSearchQuery('');
-                                    setShowDropdown(false);
-                                }}>
-                                    <Ionicons name="location-outline" size={16} color="#76C800" style={{ marginRight: 8 }} />
-                                    <ThemedText style={styles.dropdownItemText}>{area.name}</ThemedText>
-                                </Pressable>
-                            ))
-                        ) : (
-                            <View style={styles.dropdownItem}>
-                                <ThemedText style={styles.dropdownItemText}>見つかりませんでした</ThemedText>
-                            </View>
-                        )}
-                    </View>
-                )}
-
-                <View style={styles.headerRow}>
-                    <Pressable onPress={goToPreviousMonth} disabled={isFirstMonth} style={[styles.arrowButton, isFirstMonth && { opacity: 0.2 }]}>
-                        <Ionicons name="chevron-back" size={28} color="#333" />
-                    </Pressable>
-                    
-                    <View style={styles.headerTitleContainer}>
-                        <ThemedText style={styles.monthTitleText}>{year}年 {month + 1}月</ThemedText>
-                        <ThemedText style={styles.regionSubText}>現在のエリア：{areaName}</ThemedText>
-                    </View>
-
-                    <Pressable onPress={goToNextMonth} disabled={isLastMonth} style={[styles.arrowButton, isLastMonth && { opacity: 0.2 }]}>
-                        <Ionicons name="chevron-forward" size={28} color="#333" />
-                    </Pressable>
+                {/* 1. 顶部地区与月份标题 */}
+                <View style={styles.monthHeaderContainer}>
+                    <ThemedText style={styles.monthTitleText}>2026年 5月</ThemedText>
+                    <ThemedText style={styles.regionSubText}>当前地区：新宿区</ThemedText>
                 </View>
 
                 <View style={styles.calendarCard}>
@@ -339,39 +112,28 @@ const fetchAreas = async () => {
                     )}
                 </View>
 
-                {/* Clear color legend */}
+                {/* 3. 颜色分类对照说明栏（Legend） */}
                 <View style={styles.legendContainer}>
-                    <ThemedText style={styles.legendSectionTitle}>資源とごみの収集区分</ThemedText>
-                    <View style={styles.legendGrid}>
-                        <View style={styles.legendItem}>
-                            <View style={[styles.legendColorBox, {backgroundColor: '#DC2626'}]}>
-                                <Ionicons name="flame-outline" size={12} color="#FFF" />
-                            </View>
-                            <ThemedText style={styles.legendLabelText}>可燃ごみ</ThemedText>
-                        </View>
-                        <View style={styles.legendItem}>
-                            <View style={[styles.legendColorBox, {backgroundColor: '#2563EB'}]}>
-                                <MaterialCommunityIcons name="fire-off" size={14} color="#FFF" />
-                            </View>
-                            <ThemedText style={styles.legendLabelText}>不燃ごみ</ThemedText>
-                        </View>
-                        <View style={styles.legendItem}>
-                            <View style={[styles.legendColorBox, {backgroundColor: '#16A34A'}]}>
-                                <Ionicons name="newspaper-outline" size={12} color="#FFF" />
-                            </View>
-                            <ThemedText style={styles.legendLabelText}>資源</ThemedText>
-                        </View>
-                        <View style={styles.legendItem}>
-                            <View style={[styles.legendColorBox, {backgroundColor: '#EAB308'}]}>
-                                <Ionicons name="cube-outline" size={12} color="#FFF" />
-                            </View>
-                            <ThemedText style={styles.legendLabelText}>プラ容器包装</ThemedText>
-                        </View>
+                    <ThemedText style={styles.legendSectionTitle}>分類ルールの参考</ThemedText>
+
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendColorBox, { backgroundColor: GARBAGE_TYPES.BURNABLE.color }]} />
+                        <ThemedText style={styles.legendLabelText}>{GARBAGE_TYPES.BURNABLE.label}</ThemedText>
+                    </View>
+
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendColorBox, { backgroundColor: GARBAGE_TYPES.PLASTIC.color }]} />
+                        <ThemedText style={styles.legendLabelText}>{GARBAGE_TYPES.PLASTIC.label}</ThemedText>
+                    </View>
+
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendColorBox, { backgroundColor: GARBAGE_TYPES.NON_BURNABLE.color }]} />
+                        <ThemedText style={styles.legendLabelText}>{GARBAGE_TYPES.NON_BURNABLE.label}</ThemedText>
                     </View>
                 </View>
             </ScrollView>
 
-            {/* Bottom Navigation */}
+            {/* ================= 全局绿色底部选项卡菜单栏 (100% 对应主页样式) ================= */}
             <View style={styles.tabBarContainer}>
                 <View style={styles.scanBackgroundCircle} />
                 <View style={styles.tabBarBackground} />

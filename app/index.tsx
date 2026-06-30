@@ -74,6 +74,7 @@ export default function HomeScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
 
+      {/* 顶部 Logo 与应用名称 */}
       <View style={styles.headerImageContainer}>
         <ThemedText
           type="title"
@@ -90,9 +91,11 @@ export default function HomeScreen() {
         />
       </View>
 
+      {/* 登录按钮表单区域 */}
       <View style={styles.formContainer}>
+        {/* 谷歌登录 */}
         <Pressable
-          onPress={() => router.push('/signin-google' as const)}
+          onPress={() => router.push('/signin-google')}
           style={({ pressed }) => [
             styles.actionButton,
             styles.googleButton,
@@ -107,8 +110,9 @@ export default function HomeScreen() {
           </View>
         </Pressable>
 
+        {/* 邮箱快捷注册/登录（保留原样绿） */}
         <Pressable
-          onPress={() => router.push('/signin-email' as const)}
+          onPress={() => router.push('/signin-email')}
           style={({ pressed }) => [
             styles.actionButton,
             styles.emailButton,
@@ -122,8 +126,26 @@ export default function HomeScreen() {
             </ThemedText>
           </View>
         </Pressable>
+
+        {/* ✨ 新增：账号密码登录按钮 */}
+        <Pressable
+          onPress={() => router.push('/signin-password')}
+          style={({ pressed }) => [
+            styles.actionButton,
+            styles.passwordButton,
+            pressed && styles.buttonPressed,
+          ]}
+        >
+          <View style={styles.buttonContent}>
+            <AntDesign name="lock" size={20} color="#76C800" style={styles.buttonIcon} />
+            <ThemedText type="defaultSemiBold" style={styles.passwordButtonText}>
+              Sign In with Password
+            </ThemedText>
+          </View>
+        </Pressable>
       </View>
 
+      {/* 底部注册跳转栏 */}
       <View style={styles.signupContainer}>
         <View style={styles.signupRow}>
           <ThemedText style={styles.signupText}>Don't have an account? </ThemedText>
@@ -133,8 +155,9 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* 酷炫开屏动画闪屏 */}
       {showSplash && (
-        <Animated.View style={[styles.splashScreen, { opacity: splashOpacity }]}> 
+        <Animated.View style={[styles.splashScreen, { opacity: splashOpacity }]}>
           <Animated.View
             style={{
               alignItems: 'center',
@@ -166,7 +189,7 @@ export default function HomeScreen() {
                 contentFit="contain"
               />
             </Animated.View>
-            <ActivityIndicator size="large" color="#20bc5e" style={styles.loadingSpinner} />
+            <ActivityIndicator size="large" color="#76C800" style={styles.loadingSpinner} />
             <ThemedText type="default" style={styles.loadingText}>
               Loading...
             </ThemedText>
@@ -195,6 +218,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     fontSize: 40,
     lineHeight: 48,
+    fontWeight: 'bold',
   },
   reactLogo: {
     height: 140,
@@ -217,6 +241,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   buttonContent: {
     flexDirection: 'row',
@@ -229,19 +258,28 @@ const styles = StyleSheet.create({
   googleButton: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#4285F4',
+    borderColor: '#E5E7EB',
   },
   emailButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#76C800',
+  },
+  // 新增密码登录按钮白底绿边风格
+  passwordButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#76C800',
   },
   buttonPressed: {
-    opacity: 0.8,
+    opacity: 0.85,
   },
   googleButtonText: {
-    color: '#4285F4',
+    color: '#333333',
   },
   emailButtonText: {
     color: '#ffffff',
+  },
+  passwordButtonText: {
+    color: '#76C800',
   },
   signupContainer: {
     position: 'absolute',
@@ -260,9 +298,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   signupLink: {
-    color: '#2563EB',
+    color: '#5B9E00',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     lineHeight: 20,
   },
   loadingText: {
