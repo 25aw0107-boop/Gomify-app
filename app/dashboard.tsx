@@ -215,10 +215,10 @@ const styles = StyleSheet.create({
   },
 
   // 通过比率适配高度，防止在短屏幕上压缩过大
-  heroBackground: { width: '100%', height: screenHeight * 0.23, paddingTop: 55, paddingHorizontal: 24 },
-  heroImageRadius: { borderBottomLeftRadius: 30, borderBottomRightRadius: 30, resizeMode: 'cover' },
+  heroBackground: { width: '100%', height: 230, paddingTop: 55, },
+  heroImageRadius: { borderBottomLeftRadius: 20, borderBottomRightRadius: 20, resizeMode: 'cover' },
   welcomeTextContainer: { marginTop: 12 },
-  welcomeText: { fontSize: 22, fontWeight: 'bold', color: '#000', lineHeight: 32 },
+  welcomeText: { fontSize: 20, fontWeight: 'bold', color: '#000', lineHeight: 32 },
 
   // 今日打卡卡片
   taskCard: {
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: -30, // 覆叠在 Hero 边缘
+    marginTop: -75, // 覆叠在 Hero 边缘
     marginHorizontal: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
