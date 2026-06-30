@@ -36,7 +36,7 @@ export default function CalendarScreen() {
     const [dbRules, setDbRules] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
 
-    const [currentDate, setCurrentDate] = useState(new Date(2026, 5, 1)); // 2026年6月
+    const [currentDate, setCurrentDate] = useState(new Date(2026, 5, 1)); 
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -46,40 +46,73 @@ export default function CalendarScreen() {
     const isFirstMonth = year === 2026 && month === 3;
     const isLastMonth = year === 2027 && month === 0;
 
-    // ✨ 彻底重构的初始化：完全抛弃硬编码，纯用文本去匹配数据库中的真实区域
     useEffect(() => {
         const initializeData = async () => {
             setLoading(true);
             try {
-                // 1. 直接从 areas 表获取全部合法的区域数据
-                const { data: areasData, error: areasError } = await supabase
-                    .from('areas')
-                    .select('area_id, area_name_jp, ward_id')
-                    .range(0, 2999);
+                let allFetchedAreas: any[] = [];
+                let page = 0;
+                const pageSize = 1000;
+                let hasMore = true;
 
-                if (areasError) {
-                    console.error("从数据库拉取区域失败:", areasError.message);
-                    return;
+            
+                while (hasMore) {
+                    const { data, error } = await supabase
+                        .from('areas')
+                        .select('area_id, area_name_jp, ward_id')
+                        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                    if (error) {
+                        console.error("エラーが発生しました:", error.message);
+                        break;
+                    }
+
+                    if (data && data.length > 0) {
+                        allFetchedAreas = [...allFetchedAreas, ...data];
+                        if (data.length < pageSize) {
+                            hasMore = false; 
+                        } else {
+                            page++; 
+                        }
+                    } else {
+                        hasMore = false;
+                    }
                 }
 
+                console.log(`[DEBUG]  ${allFetchedAreas.length} .`);
+
                 let parsedAreas: any[] = [];
-                if (areasData) {
-                    parsedAreas = areasData.map(a => {
+                if (allFetchedAreas.length > 0) {
+                    parsedAreas = allFetchedAreas.map(a => {
                         let fullName = a.area_name_jp;
-                        // 补全名字的逻辑保持原样
-                        if (a.ward_id === 1 && !a.area_name_jp.includes('新宿区')) {
-                            fullName = `新宿区 ${a.area_name_jp}`;
+                        
+                        const wardMap: { [key: number]: string } = {
+                            1: '新宿区', 2: '北区', 3: '板橋区', 4: '練馬区', 5: '台東区', 6: '墨田区', 7: '江東区', 8: '荒川区',
+                            9: '足立区', 10: '葛飾区', 11: '渋谷区', 12: '港区', 13: '中央区',
+                            14: '千代田区', 15: '品川区', 16: '目黒区', 17: '大田区', 18: '世田谷区',
+                            19: '中野区', 20: '杉並区', 21: '豊島区', 22: '文京区',
+                            23: '江戸川区', 
+                        };
+
+                        const wardName = wardMap[a.ward_id];
+
+                        if (wardName && !a.area_name_jp.includes(wardName)) {
+                            fullName = `${wardName} ${a.area_name_jp}`;
                         }
+
                         return {
                             id: a.area_id,
                             name: fullName,
                             matchKey: fullName
                         };
                     });
+                    
                     setAllAreas(parsedAreas);
+
+                   
                 }
 
-                // 2. 获取当前登录用户的注册城市/地区
+               
                 const { data: { user } } = await supabase.auth.getUser();
 
                 if (user) {
@@ -90,27 +123,21 @@ export default function CalendarScreen() {
                         .single();
 
                     if (profile && profile.city) {
-                        const userCity = profile.city;      // 例如："千代田" 或 "池袋" 或 "秋叶原"
-                        console.log(`当前用户注册的城市是: ${userCity}`);
-
-                        // 🔍 纯文本模糊匹配：直接拿用户填的 city 去 areas 列表里搜
+                        const userCity = profile.city; 
+                        
                         const matchedArea = parsedAreas.find(area =>
                             area.name.includes(userCity) || userCity.includes(area.name)
                         );
 
                         if (matchedArea) {
-                            console.log(`✨ 成功将用户匹配到数据库真实区域: ${matchedArea.name}, 真实 area_id 是: ${matchedArea.id}`);
                             setSelectedAreaId(matchedArea.id);
                             setAreaName(matchedArea.name);
                             setLoading(false);
                             return;
-                        } else {
-                            console.log(`⚠️ 虽然用户注册了 ${userCity}，但在 areas 表里没找到对应的区域名字。`);
                         }
                     }
                 }
 
-                // 兜底：如果没登录或没成功匹配到地址，默认采用列表第一项
                 if (parsedAreas.length > 0) {
                     setSelectedAreaId(parsedAreas[0].id);
                     setAreaName(parsedAreas[0].name);
@@ -126,14 +153,16 @@ export default function CalendarScreen() {
         initializeData();
     }, []);
 
-    // 监听真实的 selectedAreaId 变动，直接去拉取日历规则
+
+
+    
     useEffect(() => {
         const fetchRules = async () => {
             if (!selectedAreaId) return;
 
             setLoading(true);
             try {
-                // 🚀 这里现在是完全纯净的，没有任何对千代田区的特殊拦截判定
+             
                 const { data: areaRules, error } = await supabase
                     .from('collection_rules')
                     .select('*')
@@ -143,7 +172,7 @@ export default function CalendarScreen() {
                     setDbRules(areaRules);
                 }
             } catch (err) {
-                console.error("读取日历规则错误:", err);
+                console.error("エラーが発生しました:", err);
             } finally {
                 setLoading(false);
             }
