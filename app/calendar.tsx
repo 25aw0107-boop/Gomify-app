@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Pressable, ScrollView, ActivityIndicator, TextInput } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Ionicons, FontAwesome5, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { supabase } from '@/config/supabase';
-import * as Location from 'expo-location';
+
 
 const colorMap: Record<string, { id: number; color: string }> = {
     '可燃ごみ': { id: 1, color: '#DC2626' }, 
@@ -179,6 +179,7 @@ const fetchAreas = async () => {
 };
 
 
+
     const renderGarbageIcon = (typeId: number, index: number) => {
         if (typeId === 1) {
             return (
@@ -265,6 +266,7 @@ const fetchAreas = async () => {
 
     return (
         <View style={styles.mainWrapper}>
+            <Stack.Screen options={{ headerShown: false }} />
             <ScrollView contentContainerStyle={styles.contentBody}>
                 
                 <View style={styles.searchContainer}>
@@ -375,11 +377,11 @@ const fetchAreas = async () => {
                 <View style={styles.tabBarBackground} />
                 <View style={styles.tabBarContent}>
                     <Pressable style={styles.tabItemBottom} onPress={() => router.push('/dashboard')}>
-                        <Octicons name="home" size={24} color="#555" />
+                        <Octicons name="home" size={22} color="#555" />
                         <ThemedText style={styles.tabLabelBottom}>ホーム</ThemedText>
                     </Pressable>
                     <Pressable style={styles.tabItemBottom} onPress={() => router.push('/calendar')}>
-                        <FontAwesome5 name="calendar-alt" size={22} color="#5B9E00" />
+                        <FontAwesome5 name="calendar-alt" size={24} color="#5B9E00" />
                         <ThemedText style={[styles.tabLabelBottom, styles.tabLabelBottomActive]}>ゴミカレンダー</ThemedText>
                     </Pressable>
                     <View style={styles.scanWrapper}>
@@ -622,93 +624,93 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
 
-    tabBarContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 95,
-        zIndex: 10,
-        justifyContent: 'flex-end',
-    },
+   tabBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 95,
+    justifyContent: 'flex-end',
+},
 
-    tabBarBackground: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 70,
-        backgroundColor: '#D1E0C5',
-        zIndex: 1,
-    },
+tabBarBackground: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 70,
+    backgroundColor: '#D1E0C5',
+    zIndex: 1,
+},
 
-    scanBackgroundCircle: {
-        position: 'absolute',
-        bottom: 30,
-        alignSelf: 'center',
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        backgroundColor: '#D1E0C5',
-        zIndex: 1,
-    },
+scanBackgroundCircle: {
+    position: 'absolute',
+    bottom: 30,
+    alignSelf: 'center',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#D1E0C5',
+    zIndex: 1,
+},
 
-    tabBarContent: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'flex-end',
-        paddingBottom: 5,
-        height: 95,
-        zIndex: 2,
-    },
+tabBarContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    paddingBottom: 5,
+    height: 95,
+    zIndex: 2,
+},
 
-    tabItemBottom: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-        height: 60,
-    },
+tabItemBottom: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    height: 60,
+},
 
-    tabLabelBottom: {
-        fontSize: 10,
-        color: '#555',
-        marginTop: 4,
-        fontWeight: '600',
-        textAlign: 'center',
-    },
+tabLabelBottom: {
+    fontSize: 9,
+    color: '#555',
+    marginTop: 4,
+    fontWeight: '600',
+    textAlign: 'center',
+},
 
-    tabLabelBottomActive: {
-        color: '#5B9E00',
-        fontWeight: 'bold',
-    },
+tabLabelBottomActive: {
+    color: '#5B9E00',
+    fontWeight: 'bold',
+},
 
-    scanWrapper: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-        height: 95,
-    },
+scanWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    height: 95,
+},
 
-    scanButton: {
-        width: 58,
-        height: 58,
-        borderRadius: 29,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-        marginBottom: 2,
-    },
+scanButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    marginBottom: 2,
+},
 
-    scanLabel: {
-        fontSize: 10,
-        color: '#555',
-        marginTop: 3,
-        fontWeight: '700',
-        textAlign: 'center',
-    },
-});
+scanLabel: {
+    fontSize: 9,
+    color: '#555',
+    marginTop: 2,
+    fontWeight: '700',
+    textAlign: 'center',
+},
+    });
+    

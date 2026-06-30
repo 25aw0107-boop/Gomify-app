@@ -358,7 +358,7 @@ export default function ScanScreen() {
           </Pressable>
 
           <Pressable style={styles.tabItem} onPress={() => router.push('/mypage')}>
-            <Ionicons name="person" size={22} color="#555" />
+            <Ionicons name="person" size={26} color="#555" />
             <ThemedText style={styles.tabLabel}>マイページ</ThemedText>
           </Pressable>
         </View>
