@@ -26,7 +26,7 @@ export default function ReuseScreen() {
     const [isFirstLoading, setIsFirstLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // --- 🎛️ 弹窗状态管理 ---
+    // --- 🎛️ ポップアップ（モーダル）状態管理 ---
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [modalMode, setModalMode] = useState<ModalMode>('delete_listing');
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -47,24 +47,24 @@ export default function ReuseScreen() {
         return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
     };
 
-    // --- 🌍 计算全局未读消息数 ---
+    // --- 🌍 計算：全バッジのグローバル未読メッセージ数 ---
     const checkGlobalUnreadCount = async (userId: string) => {
         try {
             const { count, error } = await supabase
                 .from('chat_messages')
                 .select('*', { count: 'exact', head: true })
-                .neq('sender_id', userId)
-                .eq('is_read', false);
+                .neq('sender_id', userId) // 自分以外のメッセージ
+                .eq('is_read', false);    // 未読状態のもの
 
             if (!error && count !== null) {
                 setGlobalUnreadCount(count);
             }
         } catch (err) {
-            console.error('获取全局未读数失败:', err);
+            console.error('グローバル未読数の取得に失敗しました:', err);
         }
     };
 
-    // --- 🌍 消息列表数据加载 ---
+    // --- 🌍 チャット一覧データの読み込み（[画像] 変換対応版） ---
     const loadRealMessageData = async (userId: string) => {
         try {
             const { data: roomsData, error: roomErr } = await supabase
@@ -98,6 +98,16 @@ export default function ReuseScreen() {
                             .limit(1)
                             .maybeSingle();
 
+                        // ✨ 核心ロジック：リンクURLのままであれば綺麗な「[画像]」表示に変換する
+                        let displayMessage = 'まだメッセージはありません';
+                        if (lastMsgData) {
+                            if (lastMsgData.text && lastMsgData.text.includes('chat_attachments')) {
+                                displayMessage = '[画像]';
+                            } else {
+                                displayMessage = lastMsgData.text;
+                            }
+                        }
+
                         const { count: unreadCountResult } = await supabase
                             .from('chat_messages')
                             .select('*', { count: 'exact', head: true })
@@ -111,25 +121,27 @@ export default function ReuseScreen() {
                             itemTitle: room.items?.title || '無題の商品',
                             itemImage: room.items?.images && room.items.images.length > 0 ? room.items.images[0] : null,
                             partnerName,
-                            lastMessage: lastMsgData ? lastMsgData.text : 'まだメッセージはありません',
+                            lastMessage: displayMessage, // 🌟 変換されたテキストを適用
                             lastTime: lastMsgData ? formatTime(lastMsgData.created_at) : '',
                             unreadCount: unreadCountResult || 0
                         };
                     })
                 );
 
+                // 最新の時間順にソート
                 formatted.sort((a, b) => b.lastTime.localeCompare(a.lastTime));
                 setMessageItems(formatted);
 
+                // タブ内とヘッダーの数字の完全同期
                 const totalUnread = formatted.reduce((sum, item) => sum + item.unreadCount, 0);
                 setGlobalUnreadCount(totalUnread);
             }
         } catch (err) {
-            console.error('【消息加载层】错误:', err);
+            console.error('【メッセージ読み込みエラー】:', err);
         }
     };
 
-    // --- 🌍 数据拉取管理中心 ---
+    // --- 🌍 データ更新センター ---
     const fetchAllData = async (showGlobalLoader = false) => {
         if (showGlobalLoader) setIsFirstLoading(true);
         try {
@@ -174,7 +186,7 @@ export default function ReuseScreen() {
                 await loadRealMessageData(user.id);
             }
         } catch (error: any) {
-            console.error('データ更新失敗:', error);
+            console.error('データの同期に失敗しました:', error);
         } finally {
             setIsFirstLoading(false);
             setIsRefreshing(false);
@@ -223,7 +235,7 @@ export default function ReuseScreen() {
                 await supabase.from('favorites').insert({ user_id: currentUserId, item_id: itemId });
             }
         } catch (err) {
-            console.error('お気に入り操作失敗:', err);
+            console.error('お気に入り登録エラー:', err);
             fetchAllData(false);
         }
     };
@@ -235,6 +247,7 @@ export default function ReuseScreen() {
         setIsModalVisible(true);
     };
 
+    // --- 💥 削除確定（メッセージとカスケード連動のクリア） ---
     const handleConfirmDelete = async () => {
         if (!selectedId) return;
         setIsModalVisible(false);
@@ -245,6 +258,7 @@ export default function ReuseScreen() {
                 if (error) throw error;
                 setMyListings(prev => prev.filter(item => item.id !== selectedId));
             } else if (modalMode === 'delete_chatroom') {
+                // 1. まずチャット内のメッセージデータを削除
                 const { error: msgDeleteError } = await supabase
                     .from('chat_messages')
                     .delete()
@@ -252,6 +266,7 @@ export default function ReuseScreen() {
 
                 if (msgDeleteError) throw msgDeleteError;
 
+                // 2. 次にチャットルーム自体を削除（SQLカスケードにより画像情報帳簿も自動削除されます）
                 const { error: roomDeleteError } = await supabase
                     .from('chat_rooms')
                     .delete()
@@ -263,7 +278,7 @@ export default function ReuseScreen() {
                 if (currentUserId) await checkGlobalUnreadCount(currentUserId);
             }
         } catch (error: any) {
-            console.error('【彻底删除失败】错误详情:', error.message || error);
+            console.error('【データ削除エラー】詳細は:', error.message || error);
             alert('削除に失敗しました。');
             if (currentUserId) fetchAllData(false);
         } finally {
@@ -319,7 +334,7 @@ export default function ReuseScreen() {
         );
     };
 
-    // 🌟 【重构核心：优雅一体化的聊天信息卡片】
+    // --- 🎨 メッセージ項目カードのレンダリング ---
     const renderMessageItem = ({ item }: { item: ChatRoomListItem }) => (
         <View style={styles.messageCardWrapper}>
             <Pressable
@@ -329,7 +344,7 @@ export default function ReuseScreen() {
                     params: { itemId: item.itemId }
                 })}
             >
-                {/* 1. 左侧：头像区域 */}
+                {/* 左側：アバターと未読バッジ */}
                 <View style={styles.avatarContainer}>
                     <View style={styles.avatarInnerCircle}>
                         <Ionicons name="person" size={24} color="#A0AEC0" />
@@ -337,7 +352,7 @@ export default function ReuseScreen() {
                     {item.unreadCount > 0 && <View style={styles.miniDotBadge} />}
                 </View>
 
-                {/* 2. 中间：内容区域 */}
+                {/* 中央：テキストコンテンツ */}
                 <View style={styles.messageContent}>
                     <View style={styles.messageUpperRow}>
                         <ThemedText style={styles.messageUserName} numberOfLines={1}>{item.partnerName}</ThemedText>
@@ -348,7 +363,7 @@ export default function ReuseScreen() {
                     </ThemedText>
                 </View>
 
-                {/* 3. 右侧：商品缩略图与精修版删除按钮组 */}
+                {/* 右側：商品画像とインライン削除ボタン */}
                 <View style={styles.messageRightActionSection}>
                     <View style={styles.messageMiniItemImageWrapper}>
                         {item.itemImage ? (
@@ -358,7 +373,6 @@ export default function ReuseScreen() {
                         )}
                     </View>
 
-                    {/* 内嵌精致小巧的红粉删除键 */}
                     <Pressable
                         style={styles.inlineRoomDeleteButton}
                         onPress={() => openDeleteModal(item.id, item.partnerName, 'delete_chatroom')}
@@ -375,6 +389,7 @@ export default function ReuseScreen() {
         <View style={styles.mainWrapper}>
             <Stack.Screen options={{ headerShown: false }} />
 
+            {/* 上部タブバー */}
             <View style={styles.topTabBar}>
                 {(['discover', 'favorites', 'listings', 'messages'] as TabType[]).map((tab) => {
                     const icons: Record<TabType, any> = {
@@ -458,6 +473,7 @@ export default function ReuseScreen() {
                 </Pressable>
             )}
 
+            {/* ボトムタブバー */}
             <View style={styles.tabBarContainer}>
                 <View style={styles.scanBackgroundCircle} />
                 <View style={styles.tabBarBackground} />
@@ -470,6 +486,7 @@ export default function ReuseScreen() {
                 </View>
             </View>
 
+            {/* 警告モーダルポップアップ */}
             <Modal transparent={true} visible={isModalVisible} animationType="fade" onRequestClose={() => setIsModalVisible(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalCard}>
@@ -495,7 +512,7 @@ export default function ReuseScreen() {
 }
 
 const styles = StyleSheet.create({
-    mainWrapper: { flex: 1, backgroundColor: '#F4F5F7' }, // 微调背景为轻微的高级冷灰色，凸显白色卡片
+    mainWrapper: { flex: 1, backgroundColor: '#F4F5F7' },
     topTabBar: { flexDirection: 'row', backgroundColor: '#D6E4D0', paddingTop: 50, paddingBottom: 10, justifyContent: 'space-around', alignItems: 'center' },
     tabItemTop: { alignItems: 'center', paddingVertical: 6, width: '22%', borderBottomWidth: 3, borderBottomColor: 'transparent' },
     tabItemActiveTop: { borderBottomColor: '#000000' },
@@ -520,119 +537,23 @@ const styles = StyleSheet.create({
     messageCountBadge: { backgroundColor: '#FF3B30', borderRadius: 12, paddingHorizontal: 8, marginLeft: 10 },
     messageCountBadgeText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
 
-    // 🌟 【重构样式部分：消息气泡一体化卡片体系】
-    messageCardWrapper: {
-        marginBottom: 12,
-        width: '100%'
-    },
-    messageCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 20,
-        paddingVertical: 14,
-        paddingHorizontal: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        // 添加高级弥散轻阴影
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.03,
-        shadowRadius: 8,
-        elevation: 2
-    },
-    avatarContainer: {
-        position: 'relative',
-        width: 50,
-        height: 50,
-    },
-    avatarInnerCircle: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: '#EDF2F7', // 优雅淡灰色背景
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    miniDotBadge: {
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        width: 11,
-        height: 11,
-        borderRadius: 5.5,
-        backgroundColor: '#FF3B30',
-        borderWidth: 1.5,
-        borderColor: '#FFF'
-    },
-    messageContent: {
-        flex: 1,
-        marginLeft: 14,
-        marginRight: 10,
-        justifyContent: 'center'
-    },
-    messageUpperRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        marginBottom: 5
-    },
-    messageUserName: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#2D3748',
-        flex: 1,
-        marginRight: 8
-    },
-    messageTime: {
-        fontSize: 11,
-        color: '#A0AEC0',
-        fontWeight: '500'
-    },
-    messageText: {
-        fontSize: 13,
-        color: '#718096',
-        lineHeight: 18
-    },
-    unreadMessageText: {
-        fontWeight: '700',
-        color: '#1A202C'
-    },
+    messageCardWrapper: { marginBottom: 12, width: '100%' },
+    messageCard: { backgroundColor: '#FFF', borderRadius: 20, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 },
+    avatarContainer: { position: 'relative', width: 50, height: 50 },
+    avatarInnerCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#EDF2F7', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+    miniDotBadge: { position: 'absolute', top: 0, right: 0, width: 11, height: 11, borderRadius: 5.5, backgroundColor: '#FF3B30', borderWidth: 1.5, borderColor: '#FFF' },
+    messageContent: { flex: 1, marginLeft: 14, marginRight: 10, justifyContent: 'center' },
+    messageUpperRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 },
+    messageUserName: { fontSize: 16, fontWeight: '700', color: '#2D3748', flex: 1, marginRight: 8 },
+    messageTime: { fontSize: 11, color: '#A0AEC0', fontWeight: '500' },
+    messageText: { fontSize: 13, color: '#718096', lineHeight: 18 },
+    unreadMessageText: { fontWeight: '700', color: '#1A202C' },
 
-    // 右侧联动整合区
-    messageRightActionSection: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-    },
-    messageMiniItemImageWrapper: {
-        width: 44,
-        height: 44,
-        backgroundColor: '#F7FAFC',
-        borderRadius: 8,
-        justifyContent: 'center',
-        alignItems: 'center',
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#E2E8F0'
-    },
-    messageMiniItemImage: {
-        width: 44,
-        height: 44
-    },
-    inlineRoomDeleteButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#FFF5F5', // 轻粉底色，消除边缘突兀感
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginLeft: 12,
-        borderWidth: 0.5,
-        borderColor: '#FED7D7'
-    },
+    messageRightActionSection: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+    messageMiniItemImageWrapper: { width: 44, height: 44, backgroundColor: '#F7FAFC', borderRadius: 8, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0' },
+    messageMiniItemImage: { width: 44, height: 44 },
+    inlineRoomDeleteButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFF5F5', justifyContent: 'center', alignItems: 'center', marginLeft: 12, borderWidth: 0.5, borderColor: '#FED7D7' },
 
-    // 基础底层通用组件样式保持原样
     tabBarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 95, justifyContent: 'flex-end' },
     tabBarBackground: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 70, backgroundColor: '#D1E0C5', zIndex: 1 },
     scanBackgroundCircle: { position: 'absolute', bottom: 30, alignSelf: 'center', width: 72, height: 72, borderRadius: 36, backgroundColor: '#D1E0C5', zIndex: 1 },

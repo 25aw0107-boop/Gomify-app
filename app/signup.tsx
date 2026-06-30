@@ -1,9 +1,17 @@
 import { AntDesign, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View, TextInput, SafeAreaView, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { Pressable, StyleSheet, View, TextInput, SafeAreaView, ScrollView, Alert, ActivityIndicator, Modal } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { supabase } from '@/lib/supabase';
+
+// 东京 23 区列表
+const TOKYO_23_WARDS = [
+  '千代田区', '中央区', '港区', '新宿区', '文京区', '台東区',
+  '墨田区', '江東区', '品川区', '目黒区', '大田区', '世田谷区',
+  '渋谷区', '中野区', '杉並区', '豊島区', '北区', '荒川区',
+  '板橋区', '練馬区', '足立区', '葛飾区', '江戸川区'
+];
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -24,13 +32,16 @@ export default function SignUpScreen() {
 
   // 第二步：地址信息状态
   const [postalCode, setPostalCode] = useState('');
-  const [prefecture, setPrefecture] = useState('');
-  const [city, setCity] = useState('');
+  const [prefecture] = useState('東京都'); // 🔒 固定为东京都
+  const [city, setCity] = useState('');     // 👈 用于选择23区
   const [address, setAddress] = useState('');
   const [building, setBuilding] = useState('');
 
+  // 控制 23 区选择弹窗显示隐藏的 CSS 状态
+  const [showWardModal, setShowWardModal] = useState(false);
+
   // ----------------------------------------
-  // 逻辑处理：第一步验证并进入下一步
+  // 逻辑处理：第一步验证并进入下一步 (完全恢复你原本的原样逻辑)
   // ----------------------------------------
   const handleNextStep = () => {
     if (!email || !password || !name) {
@@ -50,11 +61,12 @@ export default function SignUpScreen() {
   };
 
   // ----------------------------------------
-  // 逻辑处理：第二步最终提交（合二为一的后端写入）
+  // 逻辑处理：第二步最终提交
   // ----------------------------------------
   const handleFinalSubmit = async () => {
-    if (!postalCode || !prefecture || !city || !address) {
-      Alert.alert('エラー', '全てのフィールドを記入してください');
+    // 🎯 仅按照你的要求，将字段校验改为了不卡主 address（不输入 address 也能提交）
+    if (!postalCode || !prefecture || !city) {
+      Alert.alert('エラー', '郵便番号と市区町村を記入してください');
       return;
     }
 
@@ -81,13 +93,13 @@ export default function SignUpScreen() {
         throw new Error('ユーザーの作成に失敗しました。');
       }
 
-      // 🎯【动作 2】修正：用刚刚生成的 uid，直接将地址数据以及第一步的 name 写入公共 profiles 表中
+      // 🎯【动作 2】用刚刚生成的 uid，直接将地址数据以及第一步的 name 写入公共 profiles 表中
       const { error: insertError } = await supabase
         .from('profiles')
         .insert([
           {
             id: user.id,
-            nickname: name, // 👈 核心：将注册第一步填写的 Full Name 状态绑定推送至数据库的 nickname 字段！
+            nickname: name,
             postal_code: postalCode,
             prefecture: prefecture,
             city: city,
@@ -111,7 +123,7 @@ export default function SignUpScreen() {
   };
 
   // ========================================================
-  // 视图渲染：Step 1 - 账号创建界面 (原封不动)
+  // 视图渲染：Step 1 - 账号创建界面 (百分之百原封不动)
   // ========================================================
   if (step === 1) {
     return (
@@ -206,12 +218,12 @@ export default function SignUpScreen() {
   }
 
   // ========================================================
-  // 视图渲染：Step 2 - 住所入力界面 (原封不动)
+  // 视图渲染：Step 2 - 住所入力界面 (仅调整固定东京都、23区选择及去掉地址必填标识)
   // ========================================================
   return (
     <View style={[styles.container, { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 40 }]}>
       <Pressable
-        onPress={() => setStep(1)} // 点击返回上一步修改账号密码
+        onPress={() => setStep(1)}
         style={styles.backButtonAddress}
         disabled={loading}
       >
@@ -241,37 +253,38 @@ export default function SignUpScreen() {
           />
         </View>
 
+        {/* 都道府县：固定为东京都，加上置灰样式 */}
         <View style={styles.formGroupAddress}>
           <ThemedText type="default" style={styles.labelAddress}>
             都道府県 *
           </ThemedText>
           <TextInput
-            style={styles.inputAddress}
-            placeholder="例: 東京都"
-            placeholderTextColor="#999"
+            style={[styles.inputAddress, styles.inputDisabledAddress]}
             value={prefecture}
-            onChangeText={setPrefecture}
-            editable={!loading}
+            editable={false}
           />
         </View>
 
+        {/* 市区町村：改成选项展示框 */}
         <View style={styles.formGroupAddress}>
           <ThemedText type="default" style={styles.labelAddress}>
             市区町村 *
           </ThemedText>
-          <TextInput
-            style={styles.inputAddress}
-            placeholder="例: 千代田区"
-            placeholderTextColor="#999"
-            value={city}
-            onChangeText={setCity}
-            editable={!loading}
-          />
+          <Pressable
+            style={styles.selectSelectorAddress}
+            onPress={() => !loading && setShowWardModal(true)}
+          >
+            <ThemedText style={[styles.selectSelectorTextAddress, !city && { color: '#999' }]}>
+              {city || "区を選択してください"}
+            </ThemedText>
+            <AntDesign name="down" size={14} color="#666" />
+          </Pressable>
         </View>
 
+        {/* 本人住所：去掉 * 号，改为非必须输入 */}
         <View style={styles.formGroupAddress}>
           <ThemedText type="default" style={styles.labelAddress}>
-            本人住所を入れてください *
+            本人住所を入れてください
           </ThemedText>
           <TextInput
             style={styles.inputAddress}
@@ -311,12 +324,48 @@ export default function SignUpScreen() {
           </ThemedText>
         )}
       </Pressable>
+
+      {/* 23区选择弹出窗浮层 */}
+      <Modal
+        visible={showWardModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowWardModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowWardModal(false)}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <ThemedText style={styles.modalHeaderTitle}>区を選択してください</ThemedText>
+              <Pressable onPress={() => setShowWardModal(false)} style={styles.modalCloseButton}>
+                <AntDesign name="close" size={20} color="#666" />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalList} showsVerticalScrollIndicator={true}>
+              {TOKYO_23_WARDS.map((ward) => (
+                <Pressable
+                  key={ward}
+                  style={[styles.modalItem, city === ward && styles.modalItemActive]}
+                  onPress={() => {
+                    setCity(ward);
+                    setShowWardModal(false);
+                  }}
+                >
+                  <ThemedText style={[styles.modalItemText, city === ward && styles.modalItemTextActive]}>
+                    {ward}
+                  </ThemedText>
+                  {city === ward && <AntDesign name="check" size={18} color="#2563EB" />}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
 // ========================================================
-// 样式定义：两个页面的 CSS 样式百分之百完整保留，未做任何改变
+// 样式定义：百分之百完整保留你的原始 CSS 并追加了选择器样式
 // ========================================================
 const styles = StyleSheet.create({
   // ----- SignUp 页面原始样式 -----
@@ -474,5 +523,80 @@ const styles = StyleSheet.create({
   submitButtonTextAddress: {
     color: '#fff',
     fontSize: 16,
+  },
+
+  // ----- 追加的固定样式与弹出窗 CSS 效果 -----
+  inputDisabledAddress: {
+    backgroundColor: '#eee',
+    color: '#777',
+  },
+  selectSelectorAddress: {
+    height: 50,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#f9f9f9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectSelectorTextAddress: {
+    fontSize: 16,
+    color: '#000',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '60%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalList: {
+    paddingHorizontal: 20,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+  },
+  modalItemActive: {
+    backgroundColor: '#f0f4ff',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    marginHorizontal: -8,
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  modalItemTextActive: {
+    color: '#2563EB',
+    fontWeight: 'bold',
   },
 });

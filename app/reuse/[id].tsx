@@ -17,6 +17,9 @@ export default function ReuseDetailScreen() {
     const [confirmVisible, setConfirmVisible] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
+    // 🎯 核心新增：当前显示的图片索引
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
     // --- 🌍 拉取 Supabase 数据 ---
     const fetchItemDetailAndUser = async () => {
         if (!id) return;
@@ -111,7 +114,6 @@ export default function ReuseDetailScreen() {
         if (!itemData || !currentUserId) return;
 
         try {
-            // 1. 检查当前买家和该商品卖家之间是否已经存在聊天室
             const { data: existingRoom, error: fetchError } = await supabase
                 .from('chat_rooms')
                 .select('id')
@@ -122,16 +124,14 @@ export default function ReuseDetailScreen() {
             let finalRoomId = '';
 
             if (existingRoom) {
-                // 2. 如果房间已经存在，直接使用已有的 roomId
                 finalRoomId = existingRoom.id;
             } else {
-                // 3. 如果是第一次聊天，自动在 chat_rooms 表中创建新房间
                 const { data: newRoom, error: createError } = await supabase
                     .from('chat_rooms')
                     .insert({
                         item_id: itemData.id,
                         buyer_id: currentUserId,
-                        seller_id: itemData.user_id // 卖家 ID
+                        seller_id: itemData.user_id
                     })
                     .select('id')
                     .single();
@@ -142,14 +142,12 @@ export default function ReuseDetailScreen() {
                 }
             }
 
-            // 4. 🚀 关键修改点：丝滑跳转到你的聊天详情页！
             if (finalRoomId) {
                 router.push({
-                    // 💡 注意：这里直接把 finalRoomId 拼接到路径里，对应 app/messages/[id].tsx
                     pathname: `/messages/${finalRoomId}`,
                     params: {
-                        itemId: itemData.id,            // 捎带传递关联的商品 ID
-                        targetUserId: itemData.user_id  // 捎带传递对方的用户 ID
+                        itemId: itemData.id,
+                        targetUserId: itemData.user_id
                     }
                 });
             }
@@ -157,6 +155,18 @@ export default function ReuseDetailScreen() {
             console.error('无法开启聊天室:', err);
             alert('开启聊天失败，请稍后再试。');
         }
+    };
+
+    // 🎯 新增：上一张图片切换逻辑
+    const handlePrevImage = () => {
+        if (!itemData?.images || itemData.images.length <= 1) return;
+        setCurrentImageIndex((prev) => (prev === 0 ? itemData.images.length - 1 : prev - 1));
+    };
+
+    // 🎯 新增：下一张图片切换逻辑
+    const handleNextImage = () => {
+        if (!itemData?.images || itemData.images.length <= 1) return;
+        setCurrentImageIndex((prev) => (prev === itemData.images.length - 1 ? 0 : prev + 1));
     };
 
     if (isLoading) {
@@ -178,8 +188,10 @@ export default function ReuseDetailScreen() {
         );
     }
 
-    const hasImage = itemData.images && itemData.images.length > 0;
-    const imageUrl = hasImage ? itemData.images[0] : null;
+    // 解析图片逻辑
+    const imageList = Array.isArray(itemData.images) ? itemData.images : [];
+    const hasImage = imageList.length > 0;
+    const currentImageUrl = hasImage ? imageList[currentImageIndex] : null;
     const isMyOwnItem = currentUserId === itemData.user_id;
 
     return (
@@ -193,10 +205,41 @@ export default function ReuseDetailScreen() {
                     </Pressable>
                 </View>
 
-                {/* 商品大图 */}
+                {/* 📷 商品大图核心修改区域 */}
                 <View style={styles.imageWrapper}>
                     {hasImage ? (
-                        <Image source={{ uri: imageUrl }} style={styles.productBigImage} />
+                        <View style={styles.imageContainerInner}>
+                            <Image source={{ uri: currentImageUrl }} style={styles.productBigImage} />
+
+                            {/* 🔥 当有多张图时，渲染左侧切换按钮 */}
+                            {imageList.length > 1 && (
+                                <Pressable style={[styles.navButton, styles.leftNavButton]} onPress={handlePrevImage}>
+                                    <Ionicons name="chevron-back" size={20} color="#333" />
+                                </Pressable>
+                            )}
+
+                            {/* 🔥 当有多张图时，渲染右侧切换按钮 */}
+                            {imageList.length > 1 && (
+                                <Pressable style={[styles.navButton, styles.rightNavButton]} onPress={handleNextImage}>
+                                    <Ionicons name="chevron-forward" size={20} color="#333" />
+                                </Pressable>
+                            )}
+
+                            {/* 🔥 底部精致的分页指示小圆点 */}
+                            {imageList.length > 1 && (
+                                <View style={styles.imageBadgeRow}>
+                                    {imageList.map((_item: any, index: number) => (
+                                        <View
+                                            key={index}
+                                            style={[
+                                                styles.imageDot,
+                                                index === currentImageIndex && styles.imageDotActive
+                                            ]}
+                                        />
+                                    ))}
+                                </View>
+                            )}
+                        </View>
                     ) : (
                         <View style={styles.imagePlaceholder}>
                             <FontAwesome5 name="bicycle" size={80} color="#bbb" />
@@ -209,7 +252,7 @@ export default function ReuseDetailScreen() {
                     <ThemedText style={styles.detailTitle}>{itemData.title || '無題の商品'}</ThemedText>
                 </View>
 
-                {/* 📌 状态行：通过两端对齐，让爱心保持在最右侧 */}
+                {/* 📌 状态行 */}
                 <View style={styles.infoMetaRow}>
                     <View style={styles.metaLeftBadges}>
                         <View style={styles.metaBadge}>
@@ -223,7 +266,6 @@ export default function ReuseDetailScreen() {
                         </View>
                     </View>
 
-                    {/* ✨ 右侧极端对齐：改用绝对稳定的 Ionicons 库，彻底告别错误问号 */}
                     {!isMyOwnItem && (
                         <Pressable
                             style={[
@@ -350,7 +392,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     imageWrapper: {
-        alignItems: 'center',
+        width: '100%',
+        height: 280,
         marginBottom: 24,
         ...Platform.select({
             web: { boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.06)' },
@@ -363,9 +406,15 @@ const styles = StyleSheet.create({
             }
         })
     },
+    // 🔥 新增：支撑组件绝对定位的内部壳子
+    imageContainerInner: {
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+    },
     imagePlaceholder: {
         width: '100%',
-        height: 280,
+        height: '100%',
         backgroundColor: '#F4F3EF',
         borderRadius: 24,
         justifyContent: 'center',
@@ -373,10 +422,55 @@ const styles = StyleSheet.create({
     },
     productBigImage: {
         width: '100%',
-        height: 280,
+        height: '100%',
         borderRadius: 24,
         backgroundColor: '#F4F3EF',
-        objectFit: 'cover',
+        resizeMode: 'cover',
+    },
+    // 🔥 新增：左右换图悬浮按钮的通用样式
+    navButton: {
+        position: 'absolute',
+        top: '50%',
+        marginTop: -18, // 垂直完美居中 (36 / 2)
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255, 255, 255, 0.75)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    leftNavButton: {
+        left: 12,
+    },
+    rightNavButton: {
+        right: 12,
+    },
+    // 🔥 新增：指示器指示点容器
+    imageBadgeRow: {
+        position: 'absolute',
+        bottom: 14,
+        alignSelf: 'center',
+        flexDirection: 'row',
+        gap: 6,
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+    },
+    imageDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    },
+    imageDotActive: {
+        backgroundColor: '#FFFFFF',
+        width: 14, // 激活时拉成长胶囊状，非常现代高端
     },
     titleContainer: {
         marginBottom: 14,
@@ -407,7 +501,6 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         gap: 4,
     },
-    /* ❤️ 未点击时的灰色爱心圆圈 */
     favoriteCircleButton: {
         width: 38,
         height: 38,
@@ -418,7 +511,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#EAEAEA',
     },
-    /* ❤️ 点击激活后的温暖淡粉红圆圈 */
     favoriteCircleButtonActive: {
         backgroundColor: '#FFF1F1',
         borderColor: '#FFE0E0',
