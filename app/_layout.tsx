@@ -12,23 +12,23 @@ const [loading, setLoading] = useState(true);
   useEffect(() => {
     let isMounted = true;
 
-  const initializeSession = async () => {
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const initializeSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (isMounted) {
+          setSession(session ?? null);
+          setLoading(false);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setSession(null);
+          setLoading(false);
+        }
+      }
+    };
 
-    if (isMounted) {
-      setSession(session ?? null);
-      setLoading(false);
-    }
-  } catch (error) {
-    if (isMounted) {
-      setSession(null);
-      setLoading(false);
-    }
-  }
-};
+    // VILKTIGT: Du måste faktiskt köra funktionen här!
+    initializeSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (isMounted) {
@@ -72,6 +72,7 @@ const [loading, setLoading] = useState(true);
         animation: 'none',   // 丝滑无缝切换
       }}
     >
+      {/* 注册你项目里平铺的所有 15 个页面路径 */}
       <Stack.Screen name="index" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="signin-password" />
@@ -89,20 +90,5 @@ const [loading, setLoading] = useState(true);
       <Stack.Screen name="reuse/create" />
       <Stack.Screen name="reuse/[id]" />
     </Stack>
-  const colorScheme = useColorScheme();
-
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        <Stack.Screen name="signin-apple" options={{ headerShown: false, animation: 'none' }} />
-        <Stack.Screen name="signin-google" options={{ headerShown: false, animation: 'none' }} />
-        <Stack.Screen name="signin-email" options={{ headerShown: false, animation: 'none' }} />
-        <Stack.Screen name="address" options={{ headerShown: false }} />
-        <Stack.Screen name="dashboard" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
   );
 }
