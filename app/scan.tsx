@@ -667,7 +667,6 @@ export default function ScanScreen() {
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   mainWrapper: { flex: 1, backgroundColor: '#F8F9FA' },
   gradientBackground: { position: 'absolute', left: 0, right: 0, top: 0, height: '100%' },
