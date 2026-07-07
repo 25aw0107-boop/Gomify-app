@@ -42,23 +42,49 @@ export default function ScanScreen() {
     setIsScannerOpen(true);
   };
 
-  // 📸 ကင်မရာဖြင့် တကယ့်ပစ္စည်းကို Scan ဖတ်ပြီး AI ဖြင့် ခွဲခြားမည့် စနစ်စစ်စစ်
+
+  const delay = (ms: number) =>
+  new Promise(resolve => setTimeout(resolve, ms));
+
+async function generateWithRetry(
+  model: any,
+  contents: any,
+  retries = 3
+) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await model.generateContent(contents);
+    } catch (err: any) {
+      if (err?.status === 503 && i < retries - 1) {
+        console.log(`Retry ${i + 1}...`);
+        await delay(2000);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+  // ကင်မရာဖြင့် တကယ့်ပစ္စည်းကို Scan ဖတ်ပြီး AI ဖြင့် ခွဲခြားမည့် စနစ်စစ်စစ်
   const handleCaptureAndAnalyze = async () => {
     if (cameraRef.current && !isScanning) {
       try {
         setIsScanning(true);
-        const options = { quality: 0.3, base64: true, skipProcessing: false }; // ပုံဆိုက်ကို ပိုသေးအောင် လျှော့ချလိုက်ပါတယ်
+        const options = {
+  quality: 0.15,
+  base64: true,
+  skipProcessing: true,
+}; // reduce the photo quality to 30% to speed up the upload and analysis
         const photo = await cameraRef.current.takePictureAsync(options);
 
         if (!photo || !photo.base64) {
           throw new Error("no photo data");
         }
 
-        // 💡 Loading ပိတ်မိမနေအောင် 8 စက္ကန့်ကျော်ရင် ပယ်ဖျက်မည့် စနစ် (Timeout)
+        // Loading ပိတ်မိမနေအောင် 8 စက္ကန့်ကျော်ရင် ပယ်ဖျက်မည့် စနစ် (Timeout)
        //const controller = new AbortController();
         //const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-        const model = ai.getGenerativeModel({model: "gemini-2.5-flash",});
+        const model = ai.getGenerativeModel({model: "gemini-2.5-flash-lite",});
         const prompt = "Identify the main object in this image that is being thrown away as garbage. Reply with ONLY the item name in Japanese (e.g., ペットボトル, フライパン, 雑誌). Do not write any other sentences.";
         
         const imagePart = {
@@ -70,7 +96,10 @@ export default function ScanScreen() {
 
         // AI ထံ ပို့ပြီး အဖြေတောင်းခြင်း
         console.log("Sending request...");
-        const result = await model.generateContent([prompt, imagePart]);
+        const result = await generateWithRetry(
+  model,
+  [prompt, imagePart]
+);
         console.log("Response received");
         //clearTimeout(timeoutId);
 
@@ -81,9 +110,6 @@ export default function ScanScreen() {
           item.品名.toLowerCase().includes(aiResponseText.toLowerCase()) ||
           aiResponseText.toLowerCase().includes(item.品名.toLowerCase())
         );
-
-        setIsScanning(false);
-        setIsScannerOpen(false);
 
         if (foundItem) {
           setScanResult({
@@ -109,6 +135,10 @@ export default function ScanScreen() {
     "Error",
     error?.message || JSON.stringify(error)
   );
+}
+finally {
+   setIsScanning(false);
+   setIsScannerOpen(false);
 }
     }
   };
