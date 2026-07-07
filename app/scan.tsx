@@ -51,14 +51,14 @@ export default function ScanScreen() {
         const photo = await cameraRef.current.takePictureAsync(options);
 
         if (!photo || !photo.base64) {
-          throw new Error("ဓာတ်ပုံဒေတာ မရရှိပါ");
+          throw new Error("no photo data");
         }
 
         // 💡 Loading ပိတ်မိမနေအောင် 8 စက္ကန့်ကျော်ရင် ပယ်ဖျက်မည့် စနစ် (Timeout)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+       //const controller = new AbortController();
+        //const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = ai.getGenerativeModel({model: "gemini-2.5-flash",});
         const prompt = "Identify the main object in this image that is being thrown away as garbage. Reply with ONLY the item name in Japanese (e.g., ペットボトル, フライパン, 雑誌). Do not write any other sentences.";
         
         const imagePart = {
@@ -69,10 +69,12 @@ export default function ScanScreen() {
         };
 
         // AI ထံ ပို့ပြီး အဖြေတောင်းခြင်း
-        const result = await model.generateContent([prompt, imagePart], { signal: controller.signal });
-        clearTimeout(timeoutId);
+        console.log("Sending request...");
+        const result = await model.generateContent([prompt, imagePart]);
+        console.log("Response received");
+        //clearTimeout(timeoutId);
 
-        const aiResponseText = result.response.text().trim();
+       const aiResponseText = result.response.text().trim();
 
         // Database ထဲမှာ ရှာဖွေခြင်း
         const foundItem = TOKYO_GARBAGE_DATABASE.find(item => 
@@ -98,18 +100,16 @@ export default function ScanScreen() {
         }
 
       } catch (error: any) {
-        setIsScanning(false);
-        setIsScannerOpen(false);
-        
-        // 💡 Loading လည်ပြီး ငြိမ်မနေတော့ဘဲ ဘာကြောင့်လဲဆိုတဲ့ Error ကို တန်းပြပါလိမ့်မယ်
-        let errorMessage = error?.message || error || "Unknown Error";
-        if (error?.name === 'AbortError') {
-          errorMessage = "AI ကွန်ရက် ချိတ်ဆက်မှု အချိန်ပြည့်သွားပါပြီ (Timeout)";
-        }
-        
-        Alert.alert("Scan Error Detailed", errorMessage);
-        console.error("Detailed Error:", error);
-      }
+  console.log("==================");
+  console.log(error);
+  console.log(error?.message);
+  console.log(JSON.stringify(error, null, 2));
+
+  Alert.alert(
+    "Error",
+    error?.message || JSON.stringify(error)
+  );
+}
     }
   };
 
