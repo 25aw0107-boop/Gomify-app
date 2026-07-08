@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, FlatList, Pressable, Image, ActivityIndicator, Modal, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { StyleSheet, View, FlatList, Pressable, Image, ActivityIndicator, Modal, RefreshControl, Animated, Dimensions } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons, FontAwesome5, MaterialIcons, Octicons, Feather } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 
 type TabType = 'discover' | 'favorites' | 'listings' | 'messages';
 type ModalMode = 'delete_listing' | 'delete_chatroom';
+type FilterType = 'ward' | 'category' | null;
 
 type ChatRoomListItem = {
     id: string;
@@ -19,12 +20,27 @@ type ChatRoomListItem = {
     unreadCount: number;
 };
 
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// 📌 固定配置项
+const WARD_OPTIONS = ['千代田区', '中央区', '港区', '新宿区', '文京区', '台东区', '墨田区', '江东区', '品川区', '目黑区', '大田区', '世田谷区', '涩谷区', '中野区', '杉并区', '丰岛区', '北区', '荒川区', '板桥区', '练马区', '足立区', '葛饰区', '江户川区'];
+const CATEGORY_OPTIONS = ['家具', '衣物', '漫画图书', 'その他'];
+
 export default function ReuseScreen() {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<TabType>('discover');
 
     const [isFirstLoading, setIsFirstLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // --- 🎛️ 筛选状态管理 ---
+    const [selectedWard, setSelectedWard] = useState<string | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [currentFilterMenu, setCurrentFilterMenu] = useState<FilterType>(null);
+
+    // --- 🎬 精准定制动画状态 ---
+    const overlayOpacity = useRef(new Animated.Value(0)).current; // 背景渐变
+    const sheetTranslateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current; // 菜单滑出
 
     // --- 🎛️ ポップアップ（モーダル）状態管理 ---
     const [isModalVisible, setIsModalVisible] = useState(false);
@@ -47,14 +63,49 @@ export default function ReuseScreen() {
         return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
     };
 
+    // --- 🎬 打开筛选菜单动画 ---
+    const openFilterMenu = (type: FilterType) => {
+        setCurrentFilterMenu(type);
+        Animated.parallel([
+            Animated.timing(overlayOpacity, {
+                toValue: 1,
+                duration: 250,
+                useNativeDriver: true,
+            }),
+            Animated.timing(sheetTranslateY, {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+            })
+        ]).start();
+    };
+
+    // --- 🎬 关闭筛选菜单动画 ---
+    const closeFilterMenu = () => {
+        Animated.parallel([
+            Animated.timing(overlayOpacity, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+            }),
+            Animated.timing(sheetTranslateY, {
+                toValue: SCREEN_HEIGHT,
+                duration: 250,
+                useNativeDriver: true,
+            })
+        ]).start(() => {
+            setCurrentFilterMenu(null);
+        });
+    };
+
     // --- 🌍 計算：全バッジのグローバル未読メッセージ数 ---
     const checkGlobalUnreadCount = async (userId: string) => {
         try {
             const { count, error } = await supabase
                 .from('chat_messages')
                 .select('*', { count: 'exact', head: true })
-                .neq('sender_id', userId) // 自分以外のメッセージ
-                .eq('is_read', false);    // 未読状態のもの
+                .neq('sender_id', userId)
+                .eq('is_read', false);
 
             if (!error && count !== null) {
                 setGlobalUnreadCount(count);
@@ -64,7 +115,7 @@ export default function ReuseScreen() {
         }
     };
 
-    // --- 🌍 チャット一覧データの読み込み（[画像] 変換対応版） ---
+    // --- 🌍 チャット一覧データの読み込み ---
     const loadRealMessageData = async (userId: string) => {
         try {
             const { data: roomsData, error: roomErr } = await supabase
@@ -98,7 +149,6 @@ export default function ReuseScreen() {
                             .limit(1)
                             .maybeSingle();
 
-                        // ✨ 核心ロジック：リンクURLのままであれば綺麗な「[画像]」表示に変換する
                         let displayMessage = 'まだメッセージはありません';
                         if (lastMsgData) {
                             if (lastMsgData.text && lastMsgData.text.includes('chat_attachments')) {
@@ -121,18 +171,16 @@ export default function ReuseScreen() {
                             itemTitle: room.items?.title || '無題の商品',
                             itemImage: room.items?.images && room.items.images.length > 0 ? room.items.images[0] : null,
                             partnerName,
-                            lastMessage: displayMessage, // 🌟 変換されたテキストを適用
+                            lastMessage: displayMessage,
                             lastTime: lastMsgData ? formatTime(lastMsgData.created_at) : '',
                             unreadCount: unreadCountResult || 0
                         };
                     })
                 );
 
-                // 最新の時間順にソート
                 formatted.sort((a, b) => b.lastTime.localeCompare(a.lastTime));
                 setMessageItems(formatted);
 
-                // タブ内とヘッダーの数字の完全同期
                 const totalUnread = formatted.reduce((sum, item) => sum + item.unreadCount, 0);
                 setGlobalUnreadCount(totalUnread);
             }
@@ -163,6 +211,8 @@ export default function ReuseScreen() {
                     .from('items')
                     .select('*')
                     .not('user_id', 'eq', user.id)
+                    .eq('status', 'available')
+                    .order('priority', { ascending: false })
                     .order('created_at', { ascending: false });
                 if (data) setDiscoverItems(data);
 
@@ -171,6 +221,7 @@ export default function ReuseScreen() {
                     .from('items')
                     .select('*, favorites!inner(*)')
                     .eq('favorites.user_id', user.id)
+                    .eq('status', 'available')
                     .order('created_at', { ascending: false });
                 if (data) setFavoriteItems(data);
 
@@ -247,7 +298,6 @@ export default function ReuseScreen() {
         setIsModalVisible(true);
     };
 
-    // --- 💥 削除確定（メッセージとカスケード連動のクリア） ---
     const handleConfirmDelete = async () => {
         if (!selectedId) return;
         setIsModalVisible(false);
@@ -258,7 +308,6 @@ export default function ReuseScreen() {
                 if (error) throw error;
                 setMyListings(prev => prev.filter(item => item.id !== selectedId));
             } else if (modalMode === 'delete_chatroom') {
-                // 1. まずチャット内のメッセージデータを削除
                 const { error: msgDeleteError } = await supabase
                     .from('chat_messages')
                     .delete()
@@ -266,7 +315,6 @@ export default function ReuseScreen() {
 
                 if (msgDeleteError) throw msgDeleteError;
 
-                // 2. 次にチャットルーム自体を削除（SQLカスケードにより画像情報帳簿も自動削除されます）
                 const { error: roomDeleteError } = await supabase
                     .from('chat_rooms')
                     .delete()
@@ -287,9 +335,19 @@ export default function ReuseScreen() {
         }
     };
 
+    // --- 🔍 核心逻辑：精准过滤最终渲染的商品列表 ---
     const getFilteredData = () => {
         switch (activeTab) {
-            case 'discover': return discoverItems;
+            case 'discover': {
+                let items = discoverItems;
+                if (selectedWard) {
+                    items = items.filter(item => item.ward === selectedWard);
+                }
+                if (selectedCategory) {
+                    items = items.filter(item => item.category === selectedCategory);
+                }
+                return items;
+            }
             case 'favorites': return favoriteItems;
             case 'listings': return myListings;
             case 'messages': return messageItems;
@@ -317,9 +375,11 @@ export default function ReuseScreen() {
                 <View style={styles.itemInfo}>
                     <ThemedText style={styles.itemTitle}>{itemTitle}</ThemedText>
                     <ThemedText style={styles.itemDetail}>状態：{item.quality || '未設定'}</ThemedText>
-                    <ThemedText style={styles.itemDetail}>
-                        <Ionicons name="location-outline" size={12} color="#666" /> {item.station || '指定なし'}
-                    </ThemedText>
+                    <View style={styles.locationContainer}>
+                        <Ionicons name="location-outline" size={12} color="#5B9E00" />
+                        <ThemedText style={styles.itemWardText}>{item.ward || '未知区域'}</ThemedText>
+                        <ThemedText style={styles.itemStationText}> ({item.station || '駅未指定'})</ThemedText>
+                    </View>
                 </View>
                 {!isMyRealListing ? (
                     <Pressable style={styles.rightHeartButton} onPress={() => toggleLike(itemId)}>
@@ -334,7 +394,6 @@ export default function ReuseScreen() {
         );
     };
 
-    // --- 🎨 メッセージ項目カードのレンダリング ---
     const renderMessageItem = ({ item }: { item: ChatRoomListItem }) => (
         <View style={styles.messageCardWrapper}>
             <Pressable
@@ -344,7 +403,6 @@ export default function ReuseScreen() {
                     params: { itemId: item.itemId }
                 })}
             >
-                {/* 左側：アバターと未読バッジ */}
                 <View style={styles.avatarContainer}>
                     <View style={styles.avatarInnerCircle}>
                         <Ionicons name="person" size={24} color="#A0AEC0" />
@@ -352,7 +410,6 @@ export default function ReuseScreen() {
                     {item.unreadCount > 0 && <View style={styles.miniDotBadge} />}
                 </View>
 
-                {/* 中央：テキストコンテンツ */}
                 <View style={styles.messageContent}>
                     <View style={styles.messageUpperRow}>
                         <ThemedText style={styles.messageUserName} numberOfLines={1}>{item.partnerName}</ThemedText>
@@ -363,7 +420,6 @@ export default function ReuseScreen() {
                     </ThemedText>
                 </View>
 
-                {/* 右側：商品画像とインライン削除ボタン */}
                 <View style={styles.messageRightActionSection}>
                     <View style={styles.messageMiniItemImageWrapper}>
                         {item.itemImage ? (
@@ -429,6 +485,53 @@ export default function ReuseScreen() {
                 })}
             </View>
 
+            {/* ✨ 两个优雅的高清筛选控制按钮面板 (仅在“发现”大厅展示) */}
+            {activeTab === 'discover' && (
+                <View style={styles.filterControlRow}>
+                    <Pressable
+                        style={[styles.filterMenuButton, selectedWard !== null && styles.filterMenuButtonActive]}
+                        onPress={() => openFilterMenu('ward')}
+                    >
+                        <ThemedText style={[styles.filterMenuButtonText, selectedWard !== null && styles.filterMenuButtonTextActive]}>
+                            {selectedWard || 'エリア（地域）'}
+                        </ThemedText>
+                        <Ionicons name="chevron-down" size={14} color={selectedWard ? "#FFF" : "#666"} />
+                    </Pressable>
+
+                    <Pressable
+                        style={[styles.filterMenuButton, selectedCategory !== null && styles.filterMenuButtonActive]}
+                        onPress={() => openFilterMenu('category')}
+                    >
+                        <ThemedText style={[styles.filterMenuButtonText, selectedCategory !== null && styles.filterMenuButtonTextActive]}>
+                            {selectedCategory || 'カテゴリ'}
+                        </ThemedText>
+                        <Ionicons name="chevron-down" size={14} color={selectedCategory ? "#FFF" : "#666"} />
+                    </Pressable>
+                </View>
+            )}
+
+            {/* ✨ 过滤激活状态的便捷胶囊指示条 */}
+            {activeTab === 'discover' && (selectedWard || selectedCategory) && (
+                <View style={styles.activeFilterPillsRow}>
+                    {selectedWard && (
+                        <View style={styles.filterActivePill}>
+                            <ThemedText style={styles.filterActivePillText}>{selectedWard}</ThemedText>
+                            <Pressable onPress={() => setSelectedWard(null)} style={styles.pillCloseTouch}>
+                                <Ionicons name="close-circle" size={16} color="#5B9E00" />
+                            </Pressable>
+                        </View>
+                    )}
+                    {selectedCategory && (
+                        <View style={styles.filterActivePill}>
+                            <ThemedText style={styles.filterActivePillText}>{selectedCategory}</ThemedText>
+                            <Pressable onPress={() => setSelectedCategory(null)} style={styles.pillCloseTouch}>
+                                <Ionicons name="close-circle" size={16} color="#5B9E00" />
+                            </Pressable>
+                        </View>
+                    )}
+                </View>
+            )}
+
             {isFirstLoading ? (
                 <View style={styles.loadingCenter}>
                     <ActivityIndicator size="large" color="#5B9E00" />
@@ -456,7 +559,7 @@ export default function ReuseScreen() {
                         <View style={styles.emptyContainer}>
                             <Ionicons name="file-tray-outline" size={48} color="#999" />
                             <ThemedText style={styles.emptyText}>
-                                {activeTab === 'discover' && '現在表示できる商品はありません'}
+                                {activeTab === 'discover' && '条件に一致する商品はありません'}
                                 {activeTab === 'favorites' && 'お気に入りに登録された商品はありません'}
                                 {activeTab === 'listings' && '現在出品中の商品はありません'}
                                 {activeTab === 'messages' && 'メッセージはまだありません'}
@@ -485,6 +588,65 @@ export default function ReuseScreen() {
                     <Pressable style={styles.tabItemBottom} onPress={() => router.push('/mypage')}><Ionicons name="person" size={22} color="#555" /><ThemedText style={styles.tabLabelBottom}>マイページ</ThemedText></Pressable>
                 </View>
             </View>
+
+            {/* ✨ 完全定制化高级滑出菜单（完美修复背景渐变 + 菜单滑出动画） */}
+            {currentFilterMenu !== null && (
+                <View style={[StyleSheet.absoluteFillObject, styles.filterModalContainer]}>
+                    {/* 1. 半透明黑色渐变背景层 */}
+                    <Animated.View
+                        style={[styles.filterOverlay, { opacity: overlayOpacity }]}
+                    >
+                        <Pressable style={styles.flexTouchClose} onPress={closeFilterMenu} />
+                    </Animated.View>
+
+                    {/* 2. 纯白质感从下往上平滑推入层 */}
+                    <Animated.View
+                        style={[
+                            styles.filterBottomSheet,
+                            { transform: [{ translateY: sheetTranslateY }] }
+                        ]}
+                    >
+                        <View style={styles.sheetIndicatorBar} />
+                        <View style={styles.sheetHeaderRow}>
+                            <ThemedText style={styles.sheetTitleText}>
+                                {currentFilterMenu === 'ward' ? 'エリア（地域）で絞り込む' : 'カテゴリで絞り込む'}
+                            </ThemedText>
+                            <Pressable onPress={closeFilterMenu} style={styles.sheetCloseButtonTouch}>
+                                <Ionicons name="close" size={22} color="#999" />
+                            </Pressable>
+                        </View>
+
+                        {/* 数据选项网格列表 */}
+                        <FlatList
+                            data={currentFilterMenu === 'ward' ? WARD_OPTIONS : CATEGORY_OPTIONS}
+                            keyExtractor={(item) => item}
+                            numColumns={currentFilterMenu === 'ward' ? 3 : 2}
+                            columnWrapperStyle={styles.sheetGridRow}
+                            contentContainerStyle={styles.sheetListContent}
+                            renderItem={({ item }) => {
+                                const isSelected = currentFilterMenu === 'ward' ? selectedWard === item : selectedCategory === item;
+                                return (
+                                    <Pressable
+                                        style={[styles.gridCapsule, isSelected && styles.gridCapsuleActive]}
+                                        onPress={() => {
+                                            if (currentFilterMenu === 'ward') {
+                                                setSelectedWard(isSelected ? null : item);
+                                            } else {
+                                                setSelectedCategory(isSelected ? null : item);
+                                            }
+                                            closeFilterMenu();
+                                        }}
+                                    >
+                                        <ThemedText style={[styles.gridCapsuleText, isSelected && styles.gridCapsuleTextActive]} numberOfLines={1}>
+                                            {item}
+                                        </ThemedText>
+                                    </Pressable>
+                                );
+                            }}
+                        />
+                    </Animated.View>
+                </View>
+            )}
 
             {/* 警告モーダルポップアップ */}
             <Modal transparent={true} visible={isModalVisible} animationType="fade" onRequestClose={() => setIsModalVisible(false)}>
@@ -520,14 +682,31 @@ const styles = StyleSheet.create({
     badgeWrapper: { position: 'relative' },
     badge: { position: 'absolute', top: -4, right: -8, backgroundColor: '#FF3B30', borderRadius: 8, width: 16, height: 16, justifyContent: 'center', alignItems: 'center' },
     badgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
+
+    // ✨ 高清精致筛选样式
+    filterControlRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8, gap: 12 },
+    filterMenuButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', gap: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.02, shadowRadius: 4, elevation: 1 },
+    filterMenuButtonActive: { backgroundColor: '#5B9E00', borderColor: '#5B9E00' },
+    filterMenuButtonText: { fontSize: 13, fontWeight: '600', color: '#4A5568' },
+    filterMenuButtonTextActive: { color: '#FFFFFF' },
+
+    activeFilterPillsRow: { flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 4, flexWrap: 'wrap', gap: 8, marginTop: 4 },
+    filterActivePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EBF8FF', borderColor: '#BEE3F8', borderWidth: 1, paddingLeft: 12, paddingRight: 6, paddingVertical: 4, borderRadius: 14, gap: 4 },
+    filterActivePillText: { fontSize: 12, fontWeight: '600', color: '#2B6CB0' },
+    pillCloseTouch: { padding: 2 },
+
     listContainer: { padding: 16, paddingBottom: 180 },
     itemCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
     imageContainer: { position: 'relative' },
     imagePlaceholder: { width: 100, height: 100, backgroundColor: '#EAE6DF', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     productImage: { width: 100, height: 100, borderRadius: 12, backgroundColor: '#EAE6DF' },
     itemInfo: { flex: 1, marginLeft: 16, justifyContent: 'center' },
-    itemTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 8 },
-    itemDetail: { fontSize: 13, color: '#666', marginBottom: 4 },
+    itemTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 6 },
+    itemDetail: { fontSize: 13, color: '#718096', marginBottom: 4 },
+    locationContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+    itemWardText: { fontSize: 13, fontWeight: '600', color: '#5B9E00', marginLeft: 3 },
+    itemStationText: { fontSize: 12, color: '#A0AEC0' },
+
     rightHeartButton: { padding: 12 },
     rightDeleteButton: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22, marginRight: 4 },
     centerListingButton: { position: 'absolute', bottom: 115, left: 16, right: 16, zIndex: 9999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(235, 233, 222, 0.95)', paddingVertical: 12, borderRadius: 24, borderWidth: 1, borderColor: '#DDD' },
@@ -567,6 +746,23 @@ const styles = StyleSheet.create({
     loadingCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
     emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
     emptyText: { marginTop: 12, fontSize: 14, color: '#999' },
+
+    // ✨ 高清自定义滑出面板底层系统
+    filterModalContainer: { ...StyleSheet.absoluteFillObject, zIndex: 99999, justifyContent: 'flex-end' },
+    filterOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0, 0, 0, 0.4)' },
+    flexTouchClose: { flex: 1 },
+    filterBottomSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: SCREEN_HEIGHT * 0.65, minHeight: SCREEN_HEIGHT * 0.4, paddingBottom: 40, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 20 },
+    sheetIndicatorBar: { width: 40, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginTop: 10 },
+    sheetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 16, borderBottomWidth: 0.5, borderColor: '#EDF2F7' },
+    sheetTitleText: { fontSize: 16, fontWeight: '700', color: '#1A202C' },
+    sheetCloseButtonTouch: { padding: 4 },
+    sheetListContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 20 },
+    sheetGridRow: { justifyContent: 'flex-start', gap: 10, marginBottom: 12 },
+    gridCapsule: { flex: 1, backgroundColor: '#F7FAFC', borderColor: '#E2E8F0', borderWidth: 1, borderRadius: 20, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+    gridCapsuleActive: { backgroundColor: '#5B9E00', borderColor: '#5B9E00' },
+    gridCapsuleText: { fontSize: 13, color: '#4A5568', fontWeight: '500' },
+    gridCapsuleTextActive: { color: '#FFFFFF', fontWeight: '700' },
+
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.45)', justifyContent: 'center', alignItems: 'center' },
     modalCard: { width: '80%', maxWidth: 320, backgroundColor: '#FFFFFF', borderRadius: 24, paddingTop: 28, paddingBottom: 24, paddingHorizontal: 24, alignItems: 'center' },
     modalIconCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFF2F0', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
