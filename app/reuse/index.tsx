@@ -207,13 +207,23 @@ export default function ReuseScreen() {
             setFavoritedIds(favIdSet);
 
             if (activeTab === 'discover') {
-                const { data } = await supabase
+                let query = supabase
                     .from('items')
                     .select('*')
                     .not('user_id', 'eq', user.id)
-                    .eq('status', 'available')
+                    .eq('status', 'available');
+
+                if (selectedWard) {
+                    query = query.eq('ward', selectedWard);
+                }
+                if (selectedCategory) {
+                    query = query.eq('category', selectedCategory);
+                }
+
+                const { data } = await query
                     .order('priority', { ascending: false })
                     .order('created_at', { ascending: false });
+
                 if (data) setDiscoverItems(data);
 
             } else if (activeTab === 'favorites') {
@@ -226,6 +236,7 @@ export default function ReuseScreen() {
                 if (data) setFavoriteItems(data);
 
             } else if (activeTab === 'listings') {
+                // 出品中列表：拉取该用户的所有物品（包含已上架与已锁定的状态）
                 const { data } = await supabase
                     .from('items')
                     .select('*')
@@ -262,6 +273,12 @@ export default function ReuseScreen() {
             return () => { isFocused = false; };
         }, [activeTab])
     );
+
+    useEffect(() => {
+        if (activeTab === 'discover') {
+            fetchAllData(false);
+        }
+    }, [selectedWard, selectedCategory]);
 
     const onRefresh = () => {
         setIsRefreshing(true);
@@ -335,19 +352,9 @@ export default function ReuseScreen() {
         }
     };
 
-    // --- 🔍 核心逻辑：精准过滤最终渲染的商品列表 ---
     const getFilteredData = () => {
         switch (activeTab) {
-            case 'discover': {
-                let items = discoverItems;
-                if (selectedWard) {
-                    items = items.filter(item => item.ward === selectedWard);
-                }
-                if (selectedCategory) {
-                    items = items.filter(item => item.category === selectedCategory);
-                }
-                return items;
-            }
+            case 'discover': return discoverItems;
             case 'favorites': return favoriteItems;
             case 'listings': return myListings;
             case 'messages': return messageItems;
@@ -355,6 +362,7 @@ export default function ReuseScreen() {
         }
     };
 
+    // --- 🎨 修改后的商品渲染卡片逻辑 ---
     const renderProductItem = ({ item }: { item: any }) => {
         const isMyRealListing = activeTab === 'listings';
         const hasImage = item.images && item.images.length > 0;
@@ -362,6 +370,9 @@ export default function ReuseScreen() {
         const itemId = item.id;
         const itemTitle = item.title || '無題の商品';
         const isItemLiked = activeTab === 'favorites' ? true : favoritedIds.has(itemId);
+
+        // ✨ 判断物品是否已被锁定 (状态不为 available 视为锁定/预约中)
+        const isLocked = item.status !== 'available';
 
         return (
             <Pressable style={styles.itemCard} onPress={() => router.push(`/reuse/${itemId}`)}>
@@ -371,9 +382,26 @@ export default function ReuseScreen() {
                     ) : (
                         <View style={styles.imagePlaceholder}><FontAwesome5 name="box" size={32} color="#aaa" /></View>
                     )}
+
+                    {/* ✨ UI 变更 1：如果物品在“出品中”被锁定，图片上方添加锁定的半透明模糊效果层 */}
+                    {isMyRealListing && isLocked && (
+                        <View style={styles.lockedImageOverlay}>
+                            <Ionicons name="lock-closed" size={20} color="#FFF" />
+                            <ThemedText style={styles.lockedOverlayText}>キープ中</ThemedText>
+                        </View>
+                    )}
                 </View>
                 <View style={styles.itemInfo}>
-                    <ThemedText style={styles.itemTitle}>{itemTitle}</ThemedText>
+                    {/* ✨ UI 变更 2：标题部分。如果是锁定商品，前面增加一个优雅的橙色小标签 */}
+                    <View style={styles.titleRow}>
+                        {isMyRealListing && isLocked && (
+                            <View style={styles.lockedLabelBadge}>
+                                <ThemedText style={styles.lockedLabelText}>キープ中</ThemedText>
+                            </View>
+                        )}
+                        <ThemedText style={styles.itemTitle} numberOfLines={1}>{itemTitle}</ThemedText>
+                    </View>
+
                     <ThemedText style={styles.itemDetail}>状態：{item.quality || '未設定'}</ThemedText>
                     <View style={styles.locationContainer}>
                         <Ionicons name="location-outline" size={12} color="#5B9E00" />
@@ -673,7 +701,42 @@ export default function ReuseScreen() {
     );
 }
 
+// styles 保持原样不变...
+
 const styles = StyleSheet.create({
+    // 以下为追加的锁定状态专用高质感 UI 样式
+    lockedImageOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.45)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 12,
+    },
+    lockedOverlayText: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: 'bold',
+        marginTop: 4,
+    },
+    titleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+        gap: 6,
+    },
+    lockedLabelBadge: {
+        backgroundColor: '#FFEFE5',
+        borderColor: '#FF7A22',
+        borderWidth: 1,
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 4,
+    },
+    lockedLabelText: {
+        color: '#FF7A22',
+        fontSize: 10,
+        fontWeight: '600',
+    },
     mainWrapper: { flex: 1, backgroundColor: '#F4F5F7' },
     topTabBar: { flexDirection: 'row', backgroundColor: '#D6E4D0', paddingTop: 50, paddingBottom: 10, justifyContent: 'space-around', alignItems: 'center' },
     tabItemTop: { alignItems: 'center', paddingVertical: 6, width: '22%', borderBottomWidth: 3, borderBottomColor: 'transparent' },
