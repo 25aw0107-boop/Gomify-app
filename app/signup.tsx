@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View, TextInput, SafeAreaView, ScrollView, Alert
 import { ThemedText } from '@/components/themed-text';
 import { supabase } from '@/lib/supabase';
 
-// 东京 23 区列表
+
 const TOKYO_23_WARDS = [
   '千代田区', '中央区', '港区', '新宿区', '文京区', '台東区',
   '墨田区', '江東区', '品川区', '目黒区', '大田区', '世田谷区',
@@ -16,13 +16,11 @@ const TOKYO_23_WARDS = [
 export default function SignUpScreen() {
   const router = useRouter();
 
-  // ----------------------------------------
-  // 状態控制：控制当前处于第几步 (1: 账号密码, 2: 住所输入)
-  // ----------------------------------------
+
   const [step, setStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
 
-  // 第一步：账号基本信息状态
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

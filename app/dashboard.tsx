@@ -1,7 +1,3 @@
-import CircularProgress from 'react-native-circular-progress-indicator';
-import { ThemedText } from '@/components/themed-text';
-import { AntDesign, FontAwesome5, Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
-import { useRouter, Stack, useFocusEffect, usePathname } from 'expo-router';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ImageBackground,
@@ -14,13 +10,17 @@ import {
   ActivityIndicator,
   Dimensions,
   Modal, 
-  Platform,
   TouchableOpacity
 } from 'react-native';
+import CircularProgress from 'react-native-circular-progress-indicator';
+import { ThemedText } from '@/components/themed-text';
+import {  FontAwesome5, Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
+import { useRouter,  useFocusEffect, usePathname } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import * as Location from 'expo-location';
-import { useTheme } from '@react-navigation/native';
 import { useAppTheme } from './tema/ThemeContext';
+import { buildLocationHintText, findBestAreaMatch, formatAreaLabel } from '@/lib/nearest-area';
+
 
 const { width, height } = Dimensions.get('window');
 const isSmallPhone = height < 700;
@@ -32,14 +32,35 @@ interface ReuseItem {
   images: any;
 }
 
+
+const normalizeAddress = (str: string) => {
+  if (!str) return "";
+  return str
+    .replace(/\s+/g, '') 
+    .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) 
+    .replace(/一/g, '1')
+    .replace(/二/g, '2')
+    .replace(/三/g, '3')
+    .replace(/四/g, '4')
+    .replace(/五/g, '5')
+    .replace(/六/g, '6')
+    .replace(/七/g, '7')
+    .replace(/八/g, '8')
+    .replace(/九/g, '9')
+    .replace(/十/g, '10');
+};
+
 export default function DashboardScreen() {
   const router = useRouter();
   const { theme, selectedDesign } = useAppTheme(); 
   const pathname = usePathname();
   const isHomeActive = pathname === '/dashboard';
   const isCalendarActive = pathname === '/calendar';
+  const isScanActive = pathname === '/scan';
+  const isReuseActive = pathname.startsWith('/reuse');
+  const isMyPageActive = pathname === '/mypage';
 
-  // 1. STATS & REFS
+
   const [items, setItems] = useState<ReuseItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [userPoints, setUserPoints] = useState<number>(0);
@@ -60,7 +81,7 @@ export default function DashboardScreen() {
   const translateY = useRef(new Animated.Value(15)).current; 
   const scaleAnim = useRef(new Animated.Value(0)).current;
 
-  // 2. EFFECTS & ANIMATIONS
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
@@ -85,7 +106,7 @@ export default function DashboardScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // 3. FUNCTIONS
+
   const showModernAlert = (title: string, message: string, icon: string) => {
     setModalConfig({ title, message, icon });
     setModalVisible(true);
@@ -125,20 +146,65 @@ export default function DashboardScreen() {
     }
   };
 
-// Exempel på din Dashboard-sida:
+
 const fetchItems = async () => {
-  const { data, error } = await supabase
-    .from('items')
-    .select('*')
-    // Sortera först på de som är boostade (is_boosted = true hamnar överst)
-    .order('is_boosted', { ascending: false })
-    // Sortera därefter på datum de lades till
-    .order('created_at', { ascending: false });
-    
-  if (data) {
-    setItems(data);
+  setLoadingItems(true);
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setLoadingItems(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("items")
+      .select("*")
+      .neq("user_id", user.id) 
+      .eq("status", "available") 
+      .order("priority", { ascending: false }) 
+      .order("created_at", { ascending: false }); 
+
+    if (error) throw error;
+
+    setItems(data || []);
+  } catch (err) {
+    console.error("fetchItems error:", err);
+  } finally {
+    setLoadingItems(false);
   }
 };
+
+
+  const getWebCurrentPosition = () => {
+    return new Promise<{ coords: { latitude: number; longitude: number } }>((resolve, reject) => {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        reject(new Error('このブラウザでは位置情報機能がサポートされていません。'));
+        return;
+      }
+
+    
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            coords: {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            },
+          });
+        },
+        (error) => reject(error),
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        }
+      );
+    });
+  };
 
   const fetchTodaysGarbage = async (areaId: number) => {
     const today = new Date();
@@ -170,22 +236,23 @@ const fetchItems = async () => {
     }
   };
 
-  const initializeData = async () => {
+ 
+const initializeData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
-      // Hämtar den senast sparade staden (t.ex. "渋谷区 ...") från profilen
       const { data: profile } = await supabase.from('profiles').select('selected_area_id, city').eq('id', user.id).single();
       
       if (profile && profile.selected_area_id) {
+       
         if (profile.city) {
-          setDetectedCity(profile.city); // Sätter state så knappen uppdateras direkt vid start
+          setDetectedCity(profile.city); 
         }
         await fetchTodaysGarbage(profile.selected_area_id);
       } else {
-        setTodayGarbage("収集なし");
-        setDetectedCity("未設定");
+   
+        await useCurrentLocation();
       }
     } catch (err) {
       console.error("error:", err);
@@ -199,6 +266,7 @@ const fetchItems = async () => {
       fetchUserProfile();
     }, [])
   );
+
 
   const handleTaskPress = async () => {
     try {
@@ -249,6 +317,7 @@ const useCurrentLocation = async () => {
   setIsLocating(true);
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
+
     if (status !== 'granted') {
       showModernAlert("エラー", "位置情報のアクセスが拒否されました。", "alert-circle");
       setIsLocating(false);
@@ -256,94 +325,107 @@ const useCurrentLocation = async () => {
     }
 
     const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Highest,
+      accuracy: Location.Accuracy.BestForNavigation,
     });
+
     const { latitude, longitude } = location.coords;
 
     let detailedAddress = "";
+    let fullAddressString = ""; 
 
-    if (Platform.OS === 'web') {
+
+    try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=ja`
       );
       const data = await response.json();
+      
       if (data && data.address) {
         const province = data.address.province || "";
         const city = data.address.city || data.address.local_admin || "";
+        const district = data.address.district || data.address.city_district || "";
         const suburb = data.address.suburb || data.address.borough || "";
         const neighborhood = data.address.neighbourhood || data.address.quarter || "";
-        detailedAddress = `${province}${city}${suburb}${neighborhood}`.trim();
+        
+        detailedAddress = buildLocationHintText([province, city, district, suburb, neighborhood]);
+        fullAddressString = `${province}${city}${district}${suburb}${neighborhood}`;
       }
-    } else {
-      const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-      if (geocode && geocode.length > 0) {
-        const g = geocode[0];
-        
-        // Fånga upp ALLA tänkbara fält från Expo Location
-        const region = g.region || "";
-        const subregion = g.subregion || "";
-        const city = g.city || "";
-        const district = g.district || "";
-        const street = g.street || "";
-        const name = g.name || "";
-        
-        // Slå ihop dem till en massiv sträng. Vi bryr oss inte om den ser lite rörig ut, 
-        // vi vill bara att namnet på ditt område (t.ex. 新宿区) ska finnas någonstans inuti den.
-        detailedAddress = `${region}${subregion}${city}${district}${street}${name}`;
+    } catch (apiError) {
+      console.warn("ジオコーディングAPIの取得に失敗しました。:", apiError);
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    
+
+    const [areasResult, profileResult] = await Promise.all([
+      supabase.from('areas').select('area_id, area_name_jp, ward_id'),
+      user
+        ? supabase.from('profiles').select('selected_area_id, city, prefecture, address, building').eq('id', user.id).single()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const areasData = areasResult.data || [];
+    const profile = profileResult.data;
+    const normalizedSearchAddress = normalizeAddress(fullAddressString);
+    
+    let bestMatch = null;
+    let longestMatchLength = 0;
+
+
+    for (const area of areasData) {
+      if (!area.area_name_jp) continue;
+      
+      const normalizedDbName = normalizeAddress(area.area_name_jp);
+      
+      if (normalizedSearchAddress.includes(normalizedDbName)) {
+        if (normalizedDbName.length > longestMatchLength) {
+          longestMatchLength = normalizedDbName.length;
+          bestMatch = area;
+        }
       }
     }
 
-    const { data: areasData } = await supabase.from('areas').select('area_id, area_name_jp, ward_id');
-    
-    if (areasData) {
-      const wardMap: { [key: number]: string } = {
-        1: '新宿区', 2: '北区', 3: '板橋区', 4: '練馬区', 5: '台東区', 6: '墨田区', 7: '江東区', 8: '荒川区',
-        9: '足立区', 10: '葛飾区', 11: '渋谷区', 12: '港区', 13: '中央区', 14: '千代田区', 15: '品川区',
-        16: '目黒区', 17: '大田区', 18: '世田谷区', 19: '中野区', 20: '杉並区', 21: '豊島区', 22: '文京区', 23: '江戸川区'
-      };
 
-      const matchedArea = areasData.find(a => {
-        let fullName = a.area_name_jp;
-        const wardName = wardMap[a.ward_id];
-        if (wardName && !a.area_name_jp.includes(wardName)) {
-          fullName = `${wardName}${a.area_name_jp}`;
-        }
-        
-        const cleanDbName = fullName.replace(/\s+/g, '');
-        // Vi gör båda till små bokstäver om den skulle returnera Romaji/engelska från GPS:en
-        return detailedAddress.toLowerCase().includes(cleanDbName.toLowerCase()) || 
-               (wardName && detailedAddress.includes(wardName));
-      });
-
-      if (matchedArea) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const wardName = wardMap[matchedArea.ward_id] || "";
-          const finalAreaName = matchedArea.area_name_jp.includes(wardName) 
-            ? matchedArea.area_name_jp 
-            : `${wardName} ${matchedArea.area_name_jp}`;
-          
-          await supabase
-            .from("profiles")
-            .update({ 
-              selected_area_id: matchedArea.area_id, 
-              city: finalAreaName 
-            })
-            .eq("id", user.id);
-
-          setDetectedCity(finalAreaName);
-          await fetchTodaysGarbage(matchedArea.area_id);
-          
-          showModernAlert("成功！", `現在地を ${finalAreaName} に設定しました。`, "location");
-        }
-      } else {
-        // Om den misslyckas visar vi vad `detailedAddress` faktiskt blev, så du vet vad felet är!
-        showModernAlert(
-          "注意", 
-          `現在地のごみ収集エリアが見つかりませんでした。\n取得した住所: ${detailedAddress || "住所不明"}\nカレンダーページから手動検索してください。`, 
-          "alert-circle"
-        );
+    if (!bestMatch) {
+      const profileHints = profile
+        ? buildLocationHintText([profile.prefecture, profile.city, profile.address, profile.building])
+        : '';
+      
+      const { area: matchedArea, score } = findBestAreaMatch(
+        [detailedAddress, fullAddressString, profileHints, profile?.city, profile?.prefecture],
+        areasData
+      );
+      
+      if (matchedArea && score >= 70) {
+        bestMatch = matchedArea;
       }
+    }
+
+  
+    if (user && bestMatch) {
+      const finalAreaName = bestMatch.area_name_jp;
+
+      await supabase.from('profiles').update({
+        selected_area_id: bestMatch.area_id,
+        city: finalAreaName,
+      }).eq('id', user.id);
+
+      setDetectedCity(finalAreaName);
+      await fetchTodaysGarbage(bestMatch.area_id);
+
+      
+    } else if (user && profile?.selected_area_id) {
+      const fallbackAreaName = profile.city || '設定済みのエリア';
+      setDetectedCity(fallbackAreaName);
+      await fetchTodaysGarbage(profile.selected_area_id);
+      showModernAlert("注意", `GPSの住所が曖昧だったため、保存されている住所を使いました。`, "alert-circle");
+    } else {
+
+      showModernAlert(
+        "注意",
+        `エリアが見つかりません。\n\n【取得した住所】\n${normalizedSearchAddress}`,
+        "alert-circle"
+      );
     }
   } catch (e) {
     console.error("Dashboard GPS Error:", e);
@@ -352,7 +434,6 @@ const useCurrentLocation = async () => {
     setIsLocating(false);
   }
 };
-
 
 
   const getTodayJapaneseDate = () => {
@@ -378,7 +459,6 @@ const useCurrentLocation = async () => {
     return null;
   };
 
-  // 4. RENDERING & DETECTING THEME
   const isKawaii = selectedDesign === 'cute';
   const isNight = selectedDesign === 'night';
   const isCafe = selectedDesign === 'cafe';
@@ -392,11 +472,11 @@ const useCurrentLocation = async () => {
         : require('@/assets/images/Rectangle 8.png');
 
   const cafeTextColor = '#4A3B32'; 
-  const cafeAccentColor = '#8B5E3C'; 
+  const cafeAccentColor = '#8fa288'; 
   const cafeBackgroundColor = '#F9F6F0';
   
   const kawaiiTextColor = '#6B4E3C';
-  const kawaiiAccentColor = '#A4C3A2';
+  const kawaiiAccentColor = '#c3dec1';
   const kawaiiBackgroundColor = '#FCF5F0';
   const kawaiiPeachPink = '#F4A396';
 
@@ -409,12 +489,13 @@ const useCurrentLocation = async () => {
   const tabActiveColor = isKawaii ? kawaiiPeachPink : isNight ? '#A6C56F' : isCafe ? cafeAccentColor : '#5B9E00';
   const tabInactiveColor = isKawaii ? kawaiiPeachPink : isNight ? '#7A8B9E' : isCafe ? '#B8A89A' : '#555555';
 
+  
   return (
     <View style={[{ flex: 1 }, { backgroundColor: mainBackgroundColor }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={[styles.fullScreenContainer, (isNight || isCafe) && { backgroundColor: contentBackdropColor }]}> 
           
-          {/* HERO SEKTION */}
+     
           <ImageBackground 
             source={backgroundImage} 
             style={[styles.heroBackground, isKawaii && { backgroundColor: kawaiiBackgroundColor }, isCafe && { backgroundColor: cafeBackgroundColor }, isNight && styles.nightHeroBackground]} 
@@ -427,9 +508,8 @@ const useCurrentLocation = async () => {
                 </ThemedText>
               </Animated.View>
               
-              {/* === HÄR ÄR DIN KNAPP SOM NU VISAR "渋谷区..." === */}
               <Pressable 
-                style={[styles.gpsButton, (isKawaii || isCafe) && { backgroundColor: 'rgba(255, 255, 255, 0.95)' }, isNight && styles.nightGpsButton]} 
+                style={[styles.gpsButton, (isKawaii || isCafe) && { backgroundColor: 'rgba(255, 255, 255, 0.4)' }, isNight && styles.nightGpsButton]}
                 onPress={useCurrentLocation} 
                 disabled={isLocating}
               >
@@ -447,7 +527,6 @@ const useCurrentLocation = async () => {
             </View>
           </ImageBackground>
 
-          {/* TASK KORT */}
           <Pressable 
             onPress={handleTaskPress}
             style={({ pressed }) => [
@@ -476,10 +555,10 @@ const useCurrentLocation = async () => {
             <Ionicons name="chevron-forward" size={18} color={(isKawaii || isCafe) ? "#E0D7D3" : "#CCCCCC"} />
           </Pressable>
 
-          {/* SAMMANSLAGET KALENDER & POÄNG KORT */}
+    
           <View style={[styles.combinedCard, isKawaii && styles.kawaiiCombinedCard, isCafe && styles.cafeCombinedCard, isNight && styles.nightCombinedCard]}>
             
-            {/* Vänster del */}
+
             <View style={[styles.combinedCardLeft, isKawaii && styles.kawaiiCombinedCardLeft, isCafe && styles.cafeCombinedCardLeft, isNight && styles.nightCombinedCardLeft]}>
               <ThemedText style={[styles.cardTitleSquare, (isKawaii || isCafe) && { color: accentTextColor }, isNight && { color: accentTextColor }]}>
                 {getGarbageUI(todayGarbage).title}
@@ -495,7 +574,6 @@ const useCurrentLocation = async () => {
               />
             </View>
 
-            {/* Höger del */}
             <View style={[styles.combinedCardRight, isKawaii && styles.kawaiiCombinedCardRight, isCafe && styles.cafeCombinedCardRight, isNight && styles.nightCombinedCardRight]}>
               <ThemedText style={[styles.cardTitleSquareText, (isKawaii || isCafe) && { color: accentTextColor }, isNight && { color: accentTextColor }]}>ポイント</ThemedText>
               
@@ -524,7 +602,7 @@ const useCurrentLocation = async () => {
             </View>
           </View>
 
-          {/* REUSE SEKTION */}
+
           <View style={[styles.reuseContainer, isKawaii && styles.kawaiiReuseContainer, isCafe && styles.cafeReuseContainer, isNight && styles.nightReuseContainer]}>
             <View style={styles.reuseTitleRow}>
               <ThemedText style={[styles.reuseSectionTitle, (isKawaii || isCafe) && { color: accentTextColor }, isNight && { color: accentTextColor }]}>
@@ -561,7 +639,7 @@ const useCurrentLocation = async () => {
         </View>
       </ScrollView>
           
-      {/* MODERN MODAL */}
+
       <Modal animationType="fade" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, (isKawaii || isCafe) && { backgroundColor: '#FFFDFB', borderColor: '#F2EDE9', borderWidth: 1 }, isNight && styles.nightModalContent]}>
@@ -575,33 +653,58 @@ const useCurrentLocation = async () => {
         </View>
       </Modal>
 
-      {/* TAB BAR */}
+
       <View style={styles.tabBarContainer}>
-        <View style={[styles.scanBackgroundCircle, { backgroundColor: tabBarBgColor }]} />
         <View style={[styles.tabBarBackground, { backgroundColor: tabBarBgColor }]} />
         
         <View style={styles.tabBarContent}>
-          <Pressable style={styles.tabItem} onPress={() => router.push('/dashboard')}>
-            <Octicons name="home" size={24} color={isHomeActive ? tabActiveColor : tabInactiveColor} />
-            <ThemedText style={[styles.tabLabel, { color: isHomeActive ? tabActiveColor : tabInactiveColor, fontWeight: isHomeActive ? 'bold' : '600' }]}>ホーム</ThemedText>
+
+          <Pressable style={styles.homeItem} onPress={() => router.push('/dashboard')}>
+            <View style={[styles.tabIconCircle, isHomeActive && styles.tabIconCircleActiveHome]}>
+              <Octicons name="home" size={24} color={isHomeActive ? tabActiveColor : tabInactiveColor} />
+            </View>
+            <ThemedText style={[styles.tabLabel, { color: isHomeActive ? tabActiveColor : tabInactiveColor, fontWeight: isHomeActive ? 'bold' : '600' }]}>
+              ホーム
+            </ThemedText>
           </Pressable>
+
+
           <Pressable style={styles.tabItem} onPress={() => router.push('/calendar')}>
-            <FontAwesome5 name="calendar-alt" size={22} color={isCalendarActive ? tabActiveColor : tabInactiveColor} />
-            <ThemedText style={[styles.tabLabel, { color: isCalendarActive ? tabActiveColor : tabInactiveColor, fontWeight: isCalendarActive ? 'bold' : '600' }]}>ゴミカレンダー</ThemedText>
+            <View style={[styles.tabIconCircle, isCalendarActive && styles.tabIconCircleActive]}>
+              <FontAwesome5 name="calendar-alt" size={22} color={isCalendarActive ? tabActiveColor : tabInactiveColor} />
+            </View>
+            <ThemedText style={[styles.tabLabel, { color: isCalendarActive ? tabActiveColor : tabInactiveColor, fontWeight: isCalendarActive ? 'bold' : '600' }]}>
+              ゴミカレンダー
+            </ThemedText>
           </Pressable>
-          <View style={styles.scanWrapper}>
-            <Pressable style={styles.scanButton} onPress={() => router.push('/scan')}>
-              <Ionicons name="scan-outline" size={26} color={tabInactiveColor} />
-            </Pressable>
-            <ThemedText style={[styles.scanLabel, { color: tabInactiveColor }]}>ゴミスキャン</ThemedText>
-          </View>
+
+          <Pressable style={styles.scanWrapper} onPress={() => router.push('/scan')}>
+            <View style={[styles.scanButton, isScanActive && styles.tabIconCircleActive]}>
+              <Ionicons name="scan-outline" size={26} color={isScanActive ? tabActiveColor : tabInactiveColor} />
+            </View>
+            <ThemedText style={[styles.scanLabel, { color: isScanActive ? tabActiveColor : tabInactiveColor, fontWeight: isScanActive ? 'bold' : '700' }]}>
+              ゴミスキャン
+            </ThemedText>
+          </Pressable>
+
+
           <Pressable style={styles.tabItem} onPress={() => router.push('/reuse')}>
-            <Ionicons name="refresh-circle-outline" size={26} color={tabInactiveColor} />
-            <ThemedText style={[styles.tabLabel, { color: tabInactiveColor }]}>リユース</ThemedText>
+            <View style={[styles.tabIconCircle, isReuseActive && styles.tabIconCircleActive]}>
+              <Ionicons name="refresh-circle-outline" size={26} color={isReuseActive ? tabActiveColor : tabInactiveColor} />
+            </View>
+            <ThemedText style={[styles.tabLabel, { color: isReuseActive ? tabActiveColor : tabInactiveColor, fontWeight: isReuseActive ? 'bold' : '600' }]}>
+              リユース
+            </ThemedText>
           </Pressable>
+
+
           <Pressable style={styles.tabItem} onPress={() => router.push('/mypage')}>
-            <Ionicons name="person" size={22} color={tabInactiveColor} />
-            <ThemedText style={[styles.tabLabel, { color: tabInactiveColor }]}>マイページ</ThemedText>
+            <View style={[styles.tabIconCircle, isMyPageActive && styles.tabIconCircleActive]}>
+              <Ionicons name="person" size={22} color={isMyPageActive ? tabActiveColor : tabInactiveColor} />
+            </View>
+            <ThemedText style={[styles.tabLabel, { color: isMyPageActive ? tabActiveColor : tabInactiveColor, fontWeight: isMyPageActive ? 'bold' : '600' }]}>
+              マイページ
+            </ThemedText>
           </Pressable>
         </View>
       </View>
@@ -609,7 +712,7 @@ const useCurrentLocation = async () => {
   );
 }
 
-// 5. STYLES
+
 const HERO_HEIGHT = width <= 360 ? 270 : isSmallPhone ? 180 : isMediumPhone ? 205 : 230;
 const GRID_SIZE = width <= 360 ? 112 : isSmallPhone ? 120 : isMediumPhone ? 132 : 145;
 const SECTION_GAP = width <= 360 ? 10 : isSmallPhone ? 14 : isMediumPhone ? 18 : 22;
@@ -622,23 +725,106 @@ const styles = StyleSheet.create({
   welcomeTextContainer: { marginTop: width <= 360 ? 16 : 2, marginLeft: width <= 360 ? 20 : 40, marginRight: 20 },
   textFrame: { height: width <= 360 ? 55 : 68, justifyContent: 'center' }, 
   welcomeText: { fontWeight: 'bold', color: '#000000', lineHeight: width <= 360 ? 24 : 32, fontSize: 20 },
-  gpsButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.9)', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, alignSelf: 'flex-start', marginTop: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
+  gpsButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.5)', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, alignSelf: 'flex-start', marginTop: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2, borderColor:'#9dd79d', borderWidth: 1 },
   gpsButtonText: { fontSize: 13, fontWeight: 'bold', marginLeft: 6 },
   
-  tabItem: { alignItems: 'center', justifyContent: 'center', flex: 1, height: 60 },
-  tabLabel: { fontSize: 9, color: '#555', marginTop: 4, fontWeight: '600', textAlign: 'center' },
-  scanWrapper: { alignItems: 'center', justifyContent: 'center', flex: 1, height: 95 },
-  scanButton: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 3, marginBottom: 2 },
-  scanLabel: { fontSize: 9, color: '#555', marginTop: 2, fontWeight: '700', textAlign: 'center' },
 
-  taskCard: { backgroundColor: '#fff', borderRadius: 22, paddingVertical: height * 0.020, paddingHorizontal: width <= 360 ? 14 : width * 0.05, flexDirection: 'row', alignItems: 'center', marginTop: 30, marginHorizontal: HORIZONTAL_PADDING, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 },
+  tabItem: { 
+    alignItems: 'center', 
+    justifyContent: 'flex-start', 
+    flex: 1, 
+    height: 80, 
+    position: 'relative',
+    paddingTop: 12 
+  },
+
+  homeItem: { 
+    alignItems: 'center', 
+    justifyContent: 'flex-start', 
+    flex: 1, 
+    height: 75, 
+    position: 'relative',
+    paddingTop: 12 
+  },
+  tabIconCircle: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    transform: [{ translateY: 4 }] 
+  },
+  
+
+  tabIconCircleActiveHome: { 
+    backgroundColor: '#FFFFFF', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 3, 
+    elevation: 3, 
+    transform: [{ translateY: -18 }] 
+  },
+
+
+  tabIconCircleActive: { 
+    backgroundColor: '#FFFFFF', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 3, 
+    elevation: 3, 
+    transform: [{ translateY: -18 }] 
+  },
+  tabLabel: { 
+    fontSize: 9, 
+    color: '#555', 
+    fontWeight: '600', 
+    textAlign: 'center',
+    position: 'absolute', 
+    bottom: 4, 
+    left: 0,
+    right: 0
+  },
+
+
+  scanWrapper: { 
+    alignItems: 'center', 
+    justifyContent: 'flex-start', 
+    flex: 1, 
+    height: 80, 
+    position: 'relative',
+    paddingTop: 12
+  },
+  scanButton: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    transform: [{ translateY: 4 }]
+  },
+  scanLabel: { 
+    fontSize: 9, 
+    color: '#555', 
+    fontWeight: '700', 
+    textAlign: 'center', 
+    position: 'absolute', 
+    bottom: 4, 
+    left: 0, 
+    right: 0 
+  },
+
+  taskCard: { backgroundColor: '#fff', borderRadius: 22, borderColor:'#9dd79d', borderWidth: 1, paddingVertical: height * 0.020, paddingHorizontal: width <= 360 ? 14 : width * 0.05, flexDirection: 'row', alignItems: 'center', marginTop: 30, marginHorizontal: HORIZONTAL_PADDING, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 },
   iconContainer: { marginRight: 12 },
   taskTextContainer: { flex: 1 },
   taskTitle: { fontSize: width <= 360 ? 13 : 15, fontWeight: 'bold', color: '#000', marginBottom: 4 },
   pointsContainer: { flexDirection: 'row', gap: width <= 360 ? 6 : 10, flexWrap: 'wrap' },
   pointsTextGreen: { fontSize: width <= 360 ? 10 : 11, fontWeight: '600' },
 
-  combinedCard: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 24, marginTop: 20, marginHorizontal: HORIZONTAL_PADDING, paddingVertical: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.03, shadowRadius: 6, elevation: 2, alignItems: 'center', justifyContent: 'space-between' },
+  combinedCard: { flexDirection: 'row', backgroundColor: '#fff', borderColor:'#9dd79d', borderWidth: 1,  borderRadius: 24, marginTop: 20, marginHorizontal: HORIZONTAL_PADDING, paddingVertical: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.03, shadowRadius: 6, elevation: 2, alignItems: 'center', justifyContent: 'space-between' },
   combinedCardLeft: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderRightColor: '#F0F0F0' },
   combinedCardRight: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   cardTitleSquare: { fontSize: width <= 360 ? 12 : 14, fontWeight: 'bold', color: '#000', marginBottom: 6 },
@@ -647,7 +833,8 @@ const styles = StyleSheet.create({
   gridIcon: { marginTop: 2 },
   leafContainerCombined: { position: 'absolute', top: -5, right: width <= 360 ? 15 : 25 },
 
-  reuseContainer: { backgroundColor: '#fff', borderRadius: 24, marginTop: 25, marginHorizontal: HORIZONTAL_PADDING, paddingVertical: width <= 360 ? 18 : isSmallPhone ? 22 : isMediumPhone ? 26 : 28, paddingHorizontal: width <= 360 ? 14 : HORIZONTAL_PADDING, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 100, elevation: 1 },
+  
+  reuseContainer: { backgroundColor: '#fff', borderRadius: 24,borderColor:'#9dd79d', borderWidth: 1, marginTop: 25, marginHorizontal: HORIZONTAL_PADDING, paddingVertical: width <= 360 ? 18 : isSmallPhone ? 22 : isMediumPhone ? 26 : 28, paddingHorizontal: width <= 360 ? 14 : HORIZONTAL_PADDING, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 100, elevation: 1 },
   reuseTitleRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20, marginBottom: SECTION_GAP + 6, marginTop: -GRID_SIZE * 0.1 },
   reuseSectionTitle: { fontSize: width <= 360 ? 14 : 16, fontWeight: 'bold', color: '#000' },
   itemsScroll: { gap: 14, paddingBottom: 2 },
@@ -663,7 +850,7 @@ const styles = StyleSheet.create({
 
   tabBarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 95, justifyContent: 'flex-end' },
   tabBarBackground: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 70, zIndex: 1 },
-  scanBackgroundCircle: { position: 'absolute', bottom: 30, alignSelf: 'center', width: 72, height: 72, borderRadius: 36, zIndex: 1 },
+  scanBackgroundCircle: { display: 'none' },
   tabBarContent: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingBottom: 5, height: 95, zIndex: 2 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
@@ -674,15 +861,18 @@ const styles = StyleSheet.create({
   modalButton: { paddingVertical: 12, paddingHorizontal: 32, borderRadius: 30, width: '100%', alignItems: 'center' },
   modalButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
 
-  // --- KAWAII STYLES ---
+
   kawaiiHeroImageRadius: { opacity: 0.9 },
   kawaiiTaskCard: { backgroundColor: '#F0F4EB', borderColor: '#ffffff', borderWidth: 3, shadowColor: '#ffffff', shadowOpacity: 0.05, shadowRadius: 30, elevation: 10 },
   kawaiiCombinedCard: { backgroundColor: '#FCF6EA', borderColor: '#ffffff', borderWidth: 3, shadowOpacity: 0.03 },
   kawaiiCombinedCardLeft: { borderRightColor: '#F2EDE9' },
   kawaiiCombinedCardRight: { backgroundColor: 'transparent' },
-  kawaiiReuseContainer: { backgroundColor: '#FFFDFB', borderColor: '#ffffff', borderWidth: 3, shadowOpacity: 0.03 },
+  kawaiiReuseContainer: { backgroundColor: '#fbece8', borderColor: '#ffffff', borderWidth: 3, shadowOpacity: 0.03 },
+  kawaiiGpsButton: { backgroundColor:'rgba(92, 92, 92, 0.5)', borderWidth: 1, borderColor: '#ffffff' },
 
-  // --- CAFE STYLES ---
+
+
+  cafeHeroBackground: { backgroundColor: '#F9F6F0' },
   cafeHeroImageRadius: { opacity: 0.95 },
   cafeTaskCard: { backgroundColor: '#FFFDF9', borderColor: '#EAE1D5', borderWidth: 2, shadowColor: '#D7C4B7', shadowOpacity: 0.1, shadowRadius: 15, elevation: 5 },
   cafeCombinedCard: { backgroundColor: '#FFFDF9', borderColor: '#EAE1D5', borderWidth: 2, shadowOpacity: 0.05 },
@@ -690,16 +880,14 @@ const styles = StyleSheet.create({
   cafeCombinedCardRight: { backgroundColor: 'transparent' },
   cafeReuseContainer: { backgroundColor: '#FFFDF9', borderColor: '#EAE1D5', borderWidth: 2, shadowOpacity: 0.05 },
   cafeItemCard: { backgroundColor: '#F2EDE9' },
-  
 
-  // --- NIGHT STYLES ---
   nightHeroBackground: { backgroundColor: '#000000' },
-  nightGpsButton: { backgroundColor: '#1C2432', borderWidth: 1, borderColor: '#9288da' },
+  nightGpsButton: { backgroundColor:'rgba(92, 92, 92, 0.5)', borderWidth: 1, borderColor: '#9288da' },
   nightTaskCard: { backgroundColor: '#1C2432', borderColor: '#9288da', borderWidth: 1.5, shadowColor: '#A6C56F', shadowOpacity: 0.15, shadowRadius: 20, elevation: 8 },
-  nightCombinedCard: { backgroundColor: '#1C2432', borderColor: '#9288da', borderWidth: 1.5, shadowOpacity: 0.03 },
+  nightCombinedCard: { backgroundColor: '#1C2432', borderColor: '#9288da', borderWidth: 1.2, shadowOpacity: 0.03 },
   nightCombinedCardLeft: { borderRightColor: '#2E3A4D' },
   nightCombinedCardRight: { backgroundColor: 'transparent' },
-  nightReuseContainer: { backgroundColor: '#1C2432', borderColor: '#9288da', borderWidth: 1.5, shadowOpacity: 0.03 },
+  nightReuseContainer: { backgroundColor: '#1C2432', borderColor: '#9288da', borderWidth: 1.2, shadowOpacity: 0.03 },
   nightItemCard: { backgroundColor: '#2A3442' },
-  nightModalContent: { backgroundColor: '#1C2432', borderColor: '#9288da', borderWidth: 1.5 },
+  nightModalContent: { backgroundColor: '#1C2432', borderColor: '#9288da', borderWidth: 1. },
 });

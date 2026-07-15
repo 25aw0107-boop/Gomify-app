@@ -56,47 +56,44 @@
 //   }
 // }
 
-
 {
   "expo": {
     "name": "Gomify",
     "slug": "gomify",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "/assets/images/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/images/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
-      "supportsTabletMode": true,
+      "supportsTablet": true,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "この写真ライブラリへのアクセスは、プロフィール画像を選択するために必要です。",
         "NSCameraUsageDescription": "カメラへのアクセスは、プロフィール画像を撮影するために必要です。",
-        "NSPhotoLibraryAddUsageDescription": "写真ライブラリへのアクセスは、撮影した画像を保存するために必要です。"
+        "NSPhotoLibraryAddUsageDescription": "写真ライブラリへのアクセスは、撮影した画像を保存するために必要です。",
+        "NSLocationWhenInUseUsageDescription": "現在地から近くのごみ収集エリアを自動で設定するために位置情報を使用します。"
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "/assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "/assets/images/favicon.png"
     },
     "plugins": [
       [
@@ -104,6 +101,20 @@
         {
           "photosPermission": "この写真ライブラリへのアクセスは、プロフィール画像を選択するために必要です。",
           "cameraPermission": "カメラへのアクセスは、プロフィール画像を撮影するために必要です."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "現在地から近くのごみ収集エリアを自動で設定するために位置情報を使用します。"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "/assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
         }
       ]
     ],

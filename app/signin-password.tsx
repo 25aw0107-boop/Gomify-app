@@ -12,11 +12,11 @@ export default function SignInPasswordScreen() {
     const [securePassword, setSecurePassword] = useState(true);
     const [loading, setLoading] = useState(false);
 
-    // ✨ 新增：用于在按钮下方渲染错误文字的状态
+ 
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const handleSignIn = async () => {
-        // 每次点击登录，先清空上一次的错误信息
+
         setErrorMessage(null);
 
         if (!email || !password) {
@@ -27,7 +27,7 @@ export default function SignInPasswordScreen() {
         try {
             setLoading(true);
 
-            // 调用 Supabase 账号密码登录接口
+   
             const { data, error } = await supabase.auth.signInWithPassword({
                 email: email,
                 password: password,
@@ -38,11 +38,11 @@ export default function SignInPasswordScreen() {
             }
 
             if (data?.user) {
-                // 登录成功，顺利进入主面板
+         
                 router.replace('/dashboard');
             }
         } catch (error: any) {
-            // ✨ 核心逻辑：精准拦截并翻译错误，放入本地状态中
+           
             if (error.message === 'Invalid login credentials') {
                 setErrorMessage('メールアドレスまたはパスワードが間違っています。');
             } else {
@@ -55,10 +55,10 @@ export default function SignInPasswordScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* 强制隐藏原生导航白条 */}
+      
             <Stack.Screen options={{ headerShown: false }} />
 
-            {/* 顶部标题栏（自定义 Header） */}
+          
             <View style={styles.header}>
                 <Pressable onPress={() => router.back()} style={styles.backButton} disabled={loading}>
                     <AntDesign name="arrow-left" size={24} color="#000" />
@@ -73,9 +73,9 @@ export default function SignInPasswordScreen() {
                     Sign in with your email and password to continue.
                 </ThemedText>
 
-                {/* 表单输入区域 */}
+              
                 <View style={styles.form}>
-                    {/* 邮箱输入 */}
+               
                     <View style={styles.inputWrapper}>
                         <AntDesign name="mail" size={20} color="#666" style={styles.inputIcon} />
                         <TextInput
@@ -85,7 +85,7 @@ export default function SignInPasswordScreen() {
                             value={email}
                             onChangeText={(text) => {
                                 setEmail(text);
-                                if (errorMessage) setErrorMessage(null); // 用户重新输入时自动隐藏错误
+                                if (errorMessage) setErrorMessage(null); 
                             }}
                             autoCapitalize="none"
                             keyboardType="email-address"
@@ -93,7 +93,7 @@ export default function SignInPasswordScreen() {
                         />
                     </View>
 
-                    {/* 密码输入 */}
+               
                     <View style={styles.inputWrapper}>
                         <AntDesign name="lock" size={20} color="#666" style={styles.inputIcon} />
                         <TextInput
@@ -103,7 +103,7 @@ export default function SignInPasswordScreen() {
                             value={password}
                             onChangeText={(text) => {
                                 setPassword(text);
-                                if (errorMessage) setErrorMessage(null); // 用户重新输入时自动隐藏错误
+                                if (errorMessage) setErrorMessage(null); 
                             }}
                             secureTextEntry={securePassword}
                             autoCapitalize="none"
@@ -115,7 +115,6 @@ export default function SignInPasswordScreen() {
                     </View>
                 </View>
 
-                {/* 登录按钮 */}
                 <Pressable
                     onPress={handleSignIn}
                     style={[styles.button, loading && styles.buttonDisabled]}
@@ -130,16 +129,16 @@ export default function SignInPasswordScreen() {
                     )}
                 </Pressable>
 
-                {/* ✨ 新增：如果账号密码不对，在这这里以红色显眼文字提示用户 */}
+           
                 {errorMessage && (
                     <View style={styles.errorContainer}>
                         <ThemedText style={styles.errorText}>{errorMessage}</ThemedText>
                     </View>
                 )}
 
-                {/* 底部去注册的快捷导流栏 */}
+              
                 <View style={styles.footer}>
-                    {/* 🛠️ 修复点：这里原本误写为了 </Ref>导致报错，已修复为标准的 </ThemedText> */}
+            
                     <ThemedText style={styles.footerText}>Don't have an account? </ThemedText>
                     <Pressable onPress={() => router.push('/signup')}>
                         <ThemedText style={styles.linkText}>Sign Up</ThemedText>

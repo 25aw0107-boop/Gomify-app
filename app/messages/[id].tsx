@@ -3,11 +3,12 @@ import {
     StyleSheet, View, Pressable, TextInput, Image,
     FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Modal
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { Ionicons, FontAwesome5, Octicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { ThemedText } from '@/components/themed-text';
 import { supabase } from '@/lib/supabase';
+import { useAppTheme } from '../tema/ThemeContext';
 
 type MessageType = {
     id: string;
@@ -19,6 +20,8 @@ type MessageType = {
 
 export default function ChatScreen() {
     const router = useRouter();
+    const pathname = usePathname();
+    const { selectedDesign } = useAppTheme();
 
     const { id: pathId, itemId, targetUserId: paramTargetUserId } = useLocalSearchParams<{
         id: string;
@@ -31,7 +34,7 @@ export default function ChatScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [isImageUploading, setIsImageUploading] = useState(false);
 
-    // ✨ 控制加号上方绿色气泡菜单的显示
+
     const [isActionMenuVisible, setIsActionMenuVisible] = useState(false);
 
     const [itemContext, setItemContext] = useState<{
@@ -51,6 +54,18 @@ export default function ChatScreen() {
     const [inputText, setInputText] = useState('');
     const flatListRef = useRef<FlatList>(null);
 
+    const isKawaii = selectedDesign === 'cute';
+    const isNight = selectedDesign === 'night';
+    const isCafe = selectedDesign === 'cafe';
+    const tabBarBgColor = isNight ? '#1C2432' : isKawaii ? '#E6F0E3' : isCafe ? '#F2EBE3' : '#D1E0C5';
+    const tabInactiveColor = isKawaii ? '#A4C3A2' : isNight ? '#7A8B9E' : isCafe ? '#B8A89A' : '#555555';
+    const tabActiveColor = isNight ? '#A6C56F' : isKawaii ? '#F4A396' : isCafe ? '#8B5E3C' : '#5B9E00';
+    const isHomeActive = pathname === '/dashboard';
+    const isCalendarActive = pathname === '/calendar';
+    const isScanActive = pathname === '/scan';
+    const isReuseActive = pathname.startsWith('/reuse') || pathname.startsWith('/messages');
+    const isMyPageActive = pathname === '/mypage';
+
     const formatTime = (isoString: string) => {
         const date = new Date(isoString);
         return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -65,15 +80,19 @@ export default function ChatScreen() {
                 .neq('sender_id', userId)
                 .eq('is_read', false);
         } catch (err) {
-            console.error('【消息已读】更新失败:', err);
+            console.error('既読状態の更新に失敗しました。', err);
         }
     };
 
-    // --- 🌍 数据初始化 ---
+
     useEffect(() => {
         let isMounted = true;
         const initializeChatData = async () => {
-            if (!pathId) return;
+            if (!pathId) {
+                if (isMounted) setIsLoading(false);
+                return;
+            }
+            
             setIsLoading(true);
             try {
                 const { data: { user } } = await supabase.auth.getUser();
@@ -131,7 +150,7 @@ export default function ChatScreen() {
                     await cleanUnreadStatus(pathId, user.id);
                 }
             } catch (err) {
-                console.error('加载异常:', err);
+                console.error('読み込みエラー', err);
             } finally {
                 if (isMounted) setIsLoading(false);
             }
@@ -141,7 +160,7 @@ export default function ChatScreen() {
         return () => { isMounted = false; };
     }, [pathId, itemId, paramTargetUserId]);
 
-    // --- ⚡ 实时消息监听 ---
+
     useEffect(() => {
         if (!activeRoomId || !currentUserId) return;
 
@@ -158,10 +177,10 @@ export default function ChatScreen() {
             if (data && isChannelMounted) {
                 const formatted = data.map((msg: any) => ({
                     id: msg.id,
-                    text: msg.text,
+                    text: msg.text || '',
                     sender: msg.sender_id === currentUserId ? ('me' as const) : ('other' as const),
                     time: formatTime(msg.created_at),
-                    isImage: msg.text.includes('chat_attachments')
+                    isImage: msg.text?.includes('chat_attachments') || false
                 }));
                 setMessages(formatted);
                 setTimeout(() => {
@@ -183,10 +202,11 @@ export default function ChatScreen() {
                 if (newMsg.sender_id !== currentUserId) {
                     setMessages(prev => [...prev, {
                         id: newMsg.id,
-                        text: newMsg.text,
+                        text: newMsg.text || '',
                         sender: 'other',
                         time: formatTime(newMsg.created_at),
-                        isImage: newMsg.text.includes('chat_attachments')
+
+                        isImage: newMsg.text?.includes('chat_attachments') || false
                     }]);
                     setTimeout(() => {
                         if (isChannelMounted) flatListRef.current?.scrollToEnd({ animated: true });
@@ -203,7 +223,7 @@ export default function ChatScreen() {
         };
     }, [activeRoomId, currentUserId]);
 
-    // --- 📝 发送文本 ---
+
     const handleSend = async () => {
         if (!inputText.trim() || !activeRoomId || !currentUserId) return;
         const textToSend = inputText.trim();
@@ -224,11 +244,11 @@ export default function ChatScreen() {
                 .insert({ room_id: activeRoomId, sender_id: currentUserId, text: textToSend });
             if (error) throw error;
         } catch (error) {
-            console.error('发送失败:', error);
+            console.error('送信に失敗しました。', error);
         }
     };
 
-    // --- 📸 图片上传核心管道 ---
+
     const uploadAndSendImagePipeline = async (localUri: string) => {
         if (!activeRoomId || !currentUserId) return;
         setIsImageUploading(true);
@@ -272,14 +292,13 @@ export default function ChatScreen() {
             if (ledgerError) throw ledgerError;
 
         } catch (err: any) {
-            console.error('图片上传失败:', err);
+            console.error('画像のアップロードに失敗しました。', err);
             alert(`画像の送信に失敗しました: ${err.message || 'エラーが発生しました'}`);
         } finally {
             setIsImageUploading(false);
         }
     };
 
-    // --- 📷 拍照功能 ---
     const handleLaunchCamera = async () => {
         setIsActionMenuVisible(false);
         const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -298,7 +317,6 @@ export default function ChatScreen() {
         }
     };
 
-    // --- 🖼️ 相册选择 ---
     const handleLaunchLibrary = async () => {
         setIsActionMenuVisible(false);
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -351,7 +369,7 @@ export default function ChatScreen() {
 
     return (
         <View style={styles.mainWrapper}>
-            {/* 顶部标题栏 */}
+          
             <View style={styles.headerRow}>
                 <Pressable onPress={() => router.canGoBack() ? router.back() : router.push('/reuse/')} style={styles.backButton}>
                     <Ionicons name="chevron-back" size={28} color="#000" />
@@ -360,7 +378,6 @@ export default function ChatScreen() {
                 <View style={{ width: 40 }} />
             </View>
 
-            {/* 商品描述上下文卡片 */}
             <View style={styles.productContextCard}>
                 <View style={styles.miniImagePlaceholder}>
                     {itemContext.imageUrl ? (
@@ -377,24 +394,23 @@ export default function ChatScreen() {
                 </View>
             </View>
 
-            {/* 聊天消息流 */}
             <FlatList
                 ref={flatListRef}
                 data={messages}
                 renderItem={renderMessageBubble}
                 keyExtractor={(item) => item.id}
+                style={styles.chatList}
                 contentContainerStyle={styles.chatListContainer}
                 showsVerticalScrollIndicator={false}
                 onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
             />
 
-            {/* 输入栏与键盘避让 */}
+
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
                 <View style={styles.inputBarContainer}>
-                    {/* 加号按钮：点击直接在上方弹出绿色精美气泡 */}
                     <Pressable style={styles.plusButton} onPress={() => setIsActionMenuVisible(true)}>
                         {isImageUploading ? (
                             <ActivityIndicator size="small" color="#666" />
@@ -415,31 +431,62 @@ export default function ChatScreen() {
                 </View>
             </KeyboardAvoidingView>
 
-            {/* 全局底部导航栏 */}
+
             <View style={styles.tabBarContainer}>
-                <View style={styles.scanBackgroundCircle} />
-                <View style={styles.tabBarBackground} />
+                <View style={[styles.tabBarBackground, { backgroundColor: tabBarBgColor }]} />
                 <View style={styles.tabBarContent}>
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/dashboard')}><Octicons name="home" size={24} color="#555" /><ThemedText style={styles.tabLabelBottom}>ホーム</ThemedText></Pressable>
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/calendar')}><FontAwesome5 name="calendar-alt" size={22} color="#555" /><ThemedText style={styles.tabLabelBottom}>ゴミカレンダー</ThemedText></Pressable>
-                    <View style={styles.scanWrapper}><Pressable style={styles.scanButton} onPress={() => router.push('/scan')}><Ionicons name="scan-outline" size={26} color="#555" /></Pressable><ThemedText style={styles.scanLabel}>ゴミスキャン</ThemedText></View>
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/reuse/')}><Ionicons name="refresh-circle" size={26} color="#5B9E00" /><ThemedText style={[styles.tabLabelBottom, styles.tabLabelBottomActive]}>リユース</ThemedText></Pressable>
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/mypage')}><Ionicons name="person" size={22} color="#555" /><ThemedText style={styles.tabLabelBottom}>マイページ</ThemedText></Pressable>
+                
+                    <Pressable style={styles.tabItem} onPress={() => router.push('/dashboard')}>
+                        <View style={[styles.tabIconCircle, isHomeActive && styles.tabIconCircleActive]}>
+                            <Octicons name="home" size={24} color={isHomeActive ? tabActiveColor : tabInactiveColor} />
+                        </View>
+                        <ThemedText style={[styles.tabLabel, { color: isHomeActive ? tabActiveColor : tabInactiveColor, fontWeight: isHomeActive ? 'bold' : '600' }]}>ホーム</ThemedText>
+                    </Pressable>
+
+               
+                    <Pressable style={styles.tabItem} onPress={() => router.push('/calendar')}>
+                        <View style={[styles.tabIconCircle, isCalendarActive && styles.tabIconCircleActive]}>
+                            <FontAwesome5 name="calendar-alt" size={22} color={isCalendarActive ? tabActiveColor : tabInactiveColor} />
+                        </View>
+                        <ThemedText style={[styles.tabLabel, { color: isCalendarActive ? tabActiveColor : tabInactiveColor, fontWeight: isCalendarActive ? 'bold' : '600' }]}>ゴミカレンダー</ThemedText>
+                    </Pressable>
+
+                  
+                    <View style={styles.scanWrapper}>
+                        <Pressable style={[styles.scanButton, isScanActive && styles.tabIconCircleActive]} onPress={() => router.push('/scan')}>
+                            <Ionicons name="scan-outline" size={26} color={isScanActive ? tabActiveColor : tabInactiveColor} />
+                        </Pressable>
+                        <ThemedText style={[styles.scanLabel, { color: isScanActive ? tabActiveColor : tabInactiveColor, fontWeight: isScanActive ? 'bold' : '700' }]}>ゴミスキャン</ThemedText>
+                    </View>
+
+                  <Pressable style={styles.reuseItem} onPress={() => router.push('/reuse/')}>
+    <View style={[styles.tabIconCircle, isReuseActive && styles.tabIconCircleActiveReuse]}>
+        <Ionicons name="refresh-circle-outline" size={26} color={isReuseActive ? tabActiveColor : tabInactiveColor} />
+    </View>
+    <ThemedText style={[styles.tabLabel, { color: isReuseActive ? tabActiveColor : tabInactiveColor, fontWeight: isReuseActive ? 'bold' : '600' }]}>
+        リユース
+    </ThemedText>
+</Pressable>
+
+              
+                    <Pressable style={styles.tabItem} onPress={() => router.push('/mypage')}>
+                        <View style={[styles.tabIconCircle, isMyPageActive && styles.tabIconCircleActive]}>
+                            <Ionicons name="person" size={22} color={isMyPageActive ? tabActiveColor : tabInactiveColor} />
+                        </View>
+                        <ThemedText style={[styles.tabLabel, { color: isMyPageActive ? tabActiveColor : tabInactiveColor, fontWeight: isMyPageActive ? 'bold' : '600' }]}>マイページ</ThemedText>
+                    </Pressable>
                 </View>
             </View>
 
-            {/* ✨ 新增：完美贴合主 UI 绿白配色的「输入框上方气泡弹窗」 */}
+         
             <Modal
                 transparent={true}
                 visible={isActionMenuVisible}
                 animationType="fade"
                 onRequestClose={() => setIsActionMenuVisible(false)}
             >
-                {/* 点击弹窗外部任意区域都会优雅关闭菜单 */}
                 <Pressable style={styles.popoverOverlay} onPress={() => setIsActionMenuVisible(false)}>
                     <View style={styles.popoverMenuContainer}>
-
-                        {/* 气泡主体：采用系统整体的浅绿多白质感（#D1E0C5 / #5B9E00 细节延伸） */}
                         <View style={styles.popoverCard}>
                             <Pressable style={styles.popoverItem} onPress={handleLaunchCamera}>
                                 <Ionicons name="camera" size={18} color="#5B9E00" />
@@ -453,8 +500,6 @@ export default function ChatScreen() {
                                 <ThemedText style={styles.popoverText}>写真アルバム</ThemedText>
                             </Pressable>
                         </View>
-
-                        {/* 气泡向下的小三角箭头：定位在左下角加号按钮的正上方 */}
                         <View style={styles.popoverArrow} />
                     </View>
                 </Pressable>
@@ -462,6 +507,7 @@ export default function ChatScreen() {
         </View>
     );
 }
+
 
 const styles = StyleSheet.create({
     mainWrapper: { flex: 1, backgroundColor: '#F5F5F5' },
@@ -474,6 +520,7 @@ const styles = StyleSheet.create({
     productContextInfo: { flex: 1, marginLeft: 12 },
     contextTitle: { fontSize: 15, fontWeight: 'bold', color: '#333', marginBottom: 2 },
     contextDetails: { fontSize: 12, color: '#777' },
+    chatList: { flex: 1 },
     chatListContainer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 180 },
     bubbleWrapper: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 16, maxWidth: '85%' },
     bubbleMeWrapper: { alignSelf: 'flex-end', flexDirection: 'row-reverse' },
@@ -483,72 +530,123 @@ const styles = StyleSheet.create({
     imageBubble: { padding: 4, borderRadius: 12, overflow: 'hidden' },
     chatRenderedImage: { width: 200, height: 150, borderRadius: 10 },
     bubbleOther: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 4 },
-    bubbleMe: { backgroundColor: '#D1E0C5', borderTopRightRadius: 4 }, // 保持原有柔和绿色消息框
+    bubbleMe: { backgroundColor: '#D1E0C5', borderTopRightRadius: 4 },
     bubbleText: { fontSize: 14, color: '#333', lineHeight: 20 },
     chatTime: { fontSize: 10, color: '#999', marginHorizontal: 6, bottom: 2 },
-    inputBarContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderColor: '#EFEFEF', marginBottom: 95 },
+    inputBarContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderColor: '#EFEFEF', marginBottom: 70 },
     plusButton: { padding: 4, width: 35, alignItems: 'center', justifyContent: 'center' },
     chatTextInput: { flex: 1, backgroundColor: '#F2F2F2', borderRadius: 20, height: 40, paddingHorizontal: 16, marginHorizontal: 10, fontSize: 14 },
     sendButton: { padding: 4 },
-    tabBarContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 95, justifyContent: 'flex-end' },
-    tabBarBackground: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 70, backgroundColor: '#D1E0C5', zIndex: 1 },
-    scanBackgroundCircle: { position: 'absolute', bottom: 30, alignSelf: 'center', width: 72, height: 72, borderRadius: 36, backgroundColor: '#D1E0C5', zIndex: 1 },
-    tabBarContent: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', paddingBottom: 5, height: 95, zIndex: 2 },
-    tabItemBottom: { alignItems: 'center', justifyContent: 'center', flex: 1, height: 60 },
-    tabLabelBottom: { fontSize: 9, color: '#555', marginTop: 4, fontWeight: '600', textAlign: 'center' },
-    tabLabelBottomActive: { color: '#5B9E00', fontWeight: 'bold' },
-    scanWrapper: { alignItems: 'center', justifyContent: 'center', flex: 1, height: 95 },
-    scanButton: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
-    scanLabel: { fontSize: 9, color: '#555', marginTop: 2, fontWeight: '700', textAlign: 'center' },
 
-    // ✨ 新增：加号正上方的绿色微章气泡弹窗样式
-    popoverOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.15)' }, // 轻量阴影背景
-    popoverMenuContainer: {
+   
+    tabBarContainer: {
         position: 'absolute',
-        bottom: 150, // 正好浮动在加号按钮上方
-        left: 12,    // 靠近加号的对齐位置
-        width: 150,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 95,
+        justifyContent: 'flex-end',
     },
-    popoverCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        paddingVertical: 4,
-        borderWidth: 1.5,
-        borderColor: '#D1E0C5', // 使用你底部 Tab 的特征嫩绿色作为边框
-        // 增加柔和的阴影，让气泡产生浮空感
-        shadowColor: '#5B9E00',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.12,
-        shadowRadius: 6,
-        elevation: 4,
+    tabBarBackground: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 70,
+        zIndex: 1,
     },
-    popoverItem: {
+    tabBarContent: {
         flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'flex-end',
+        paddingBottom: 5,
+        height: 95,
+        zIndex: 2,
+    },
+
+
+  tabIconCircleActiveReuse: {
+    transform: [{ translateY: -0 }],
+  },
+
+    tabItem: {
         alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 14,
+        justifyContent: 'flex-start',
+        flex: 1,
+        height: 80,
+        position: 'relative',
+        paddingTop: 12,
     },
-    popoverText: {
-        fontSize: 14,
-        color: '#333333',
-        marginLeft: 10,
-        fontWeight: '600',
+    reuseItem: {
+        alignItems: 'center',
+        justifyContent: 'flex-start', 
+        flex: 1,
+        height: 80,
+        position: 'relative',
+        paddingTop: 12,
     },
-    popoverDivider: {
-        height: 1,
-        backgroundColor: '#EFEFEF',
-        marginHorizontal: 12,
+    scanWrapper: {
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        flex: 1,
+        height: 80,
+        position: 'relative',
+        paddingTop: 12,
     },
-    popoverArrow: {
-        width: 12,
-        height: 12,
+    scanButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'transparent',
+        transform: [{ translateY: 4 }],
+    },
+    tabIconCircle: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'transparent',
+        transform: [{ translateY: 4 }],
+    },
+
+    
+    tabIconCircleActive: {
         backgroundColor: '#FFFFFF',
-        borderLeftWidth: 1.5,
-        borderBottomWidth: 1.5,
-        borderColor: '#D1E0C5',
-        transform: [{ rotate: '-45deg' }],
-        position: 'absolute',
-        bottom: -7, // 让小三角贴在气泡卡片最底下
-        left: 16,   // 刚好指向左下角的加号中心
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 4,
+        transform: [{ translateY: -38 }],
     },
+    tabLabel: {
+        fontSize: 9,
+        color: '#555',
+        fontWeight: '600',
+        textAlign: 'center',
+        position: 'absolute',
+        bottom: 4,
+        left: 0,
+        right: 0,
+    },
+    scanLabel: {
+        fontSize: 9,
+        color: '#555',
+        fontWeight: '700',
+        textAlign: 'center',
+        position: 'absolute',
+        bottom: 4,
+        left: 0,
+        right: 0,
+    },
+    popoverOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.15)' },
+    popoverMenuContainer: { position: 'absolute', bottom: 124, left: 12, width: 150 },
+    popoverCard: { backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 4, borderWidth: 1.5, borderColor: '#D1E0C5', shadowColor: '#5B9E00', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 },
+    popoverItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14 },
+    popoverText: { fontSize: 14, color: '#333333', marginLeft: 10, fontWeight: '600' },
+    popoverDivider: { height: 1, backgroundColor: '#EFEFEF', marginHorizontal: 12 },
+    popoverArrow: { width: 12, height: 12, backgroundColor: '#FFFFFF', borderLeftWidth: 1.5, borderBottomWidth: 1.5, borderColor: '#D1E0C5', transform: [{ rotate: '-45deg' }], position: 'absolute', bottom: -7, left: 16 }
 });
