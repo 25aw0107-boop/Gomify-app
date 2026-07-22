@@ -83,7 +83,7 @@ export const TOKYO_GARBAGE_DATABASE = [
   { "品名": "デスクトップパソコン・ノートPC", "分別区分": "パソコンリサイクル", "出し方": "メーカー回収またはリネットジャパン宅配回収（23区共通）" }
 ];
 
-// ٢။ Calendar Screen က ဆက်သုံးသွားမည့် ဒေတာပုံစံဟောင်း
+// Calendar Screen
 export const GARBAGE_DATA = [
   { name: "ペットボトル", category: "資源ごみ", instructions: "キャップとラベルを外して、中を軽くすすいで出してください。" },
   { name: "缶", category: "資源ごみ", instructions: "中を軽くすすいで、つぶさずに資源回収箱に出してください。" },

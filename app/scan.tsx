@@ -7,7 +7,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // 🔑 အစ်ကို့ရဲ့ AI Studio ထဲက API Key အစစ်ကို ဒီထဲမှာ ထည့်ပေးထားပါတယ်ဗျာ
@@ -64,7 +64,7 @@ async function generateWithRetry(
     }
   }
 }
-  // ကင်မရာဖြင့် တကယ့်ပစ္စည်းကို Scan ဖတ်ပြီး AI ဖြင့် ခွဲခြားမည့် စနစ်စစ်စစ်
+  // Scan with AI and search in the database
   const handleCaptureAndAnalyze = async () => {
     if (cameraRef.current && !isScanning) {
       try {
@@ -80,7 +80,7 @@ async function generateWithRetry(
           throw new Error("no photo data");
         }
 
-        // Loading ပိတ်မိမနေအောင် 8 စက္ကန့်ကျော်ရင် ပယ်ဖျက်မည့် စနစ် (Timeout)
+        // Loading Timeout 
        //const controller = new AbortController();
         //const timeoutId = setTimeout(() => controller.abort(), 8000);
 
@@ -94,7 +94,7 @@ async function generateWithRetry(
           },
         };
 
-        // AI ထံ ပို့ပြီး အဖြေတောင်းခြင်း
+        // AI analysis request
         console.log("Sending request...");
         const result = await generateWithRetry(
   model,
@@ -143,7 +143,7 @@ finally {
     }
   };
 
-  // တိုကျို ၂၃ မြို့နယ်လုံးရဲ့ database ထဲမှာ လိုက်ရှာမယ့် Logic
+  // Tokyo Garbage Database 
   const handleSearch = () => {
   if (!searchQuery.trim()) return;
   setScanResult(null);
@@ -313,14 +313,22 @@ finally {
               </View>
 
               <View style={styles.cameraFooter}>
-                <Pressable style={[styles.captureButton, isScanning && styles.disabledCaptureButton]} onPress={handleCaptureAndAnalyze} disabled={isScanning}>
-                  {isScanning ? (
-                    <ActivityIndicator size="large" color="#76C800" />
-                  ) : (
-                    <View style={styles.innerCaptureCircle} />
-                  )}
-                </Pressable>
+                <Pressable
+  style={[styles.captureButton, isScanning && styles.disabledCaptureButton]}
+  onPress={handleCaptureAndAnalyze}
+  disabled={isScanning}
+>
+  <View style={styles.innerCaptureCircle} />
+</Pressable>
               </View>
+              {isScanning && (
+  <View style={styles.scanningOverlay}>
+    <ActivityIndicator size="large" color="#FFFFFF" />
+    <ThemedText style={styles.scanningText}>
+      Scanning...
+    </ThemedText>
+  </View>
+)}
             </SafeAreaView>
           </CameraView>
         </View>
@@ -422,5 +430,31 @@ const styles = StyleSheet.create({
   tabLabelBottom: { fontSize: 9, color: '#555', marginTop: 4, fontWeight: '600', textAlign: 'center' },
   scanWrapper: { alignItems: 'center', justifyContent: 'center', flex: 1, height: 95 },
   scanButton: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 3, marginBottom: 2 },
-  scanLabel: { fontSize: 9, color: '#555', marginTop: 2, fontWeight: '700', textAlign: 'center' }
+  scanLabel: {
+  fontSize: 9,
+  color: '#555',
+  marginTop: 2,
+  fontWeight: '700',
+  textAlign: 'center'
+},
+
+
+scanningOverlay: {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(0,0,0,0.45)',
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+
+scanningText: {
+  color: '#FFFFFF',
+  fontSize: 18,
+  fontWeight: 'bold',
+  marginTop: 12,
+}
+
 });
