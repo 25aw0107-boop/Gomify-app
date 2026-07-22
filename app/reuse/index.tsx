@@ -20,7 +20,8 @@ type ItemType = {
     status: string;
     user_id: string;
     category?: string;
-    priority?: boolean | number | null; 
+    priority?: boolean | number | null;
+    is_locked?: boolean | null; // 👈 增加锁定属性定义
 };
 
 type ChatRoomListItem = {
@@ -44,13 +45,26 @@ const ProductRow = React.memo(({ item, activeTab, isNight, cardBgColor, borderCo
     const hasImage = item.images && item.images.length > 0 && item.images[0].startsWith('http');
     const imageUrl = hasImage ? item.images![0] : null;
 
+    // 判断是否锁定状态
+    const isLocked = item.is_locked === true || item.status === 'locked';
+
     return (
         <Pressable style={[styles.itemCard, { backgroundColor: cardBgColor, borderColor: borderColor, borderWidth: 1 }]} onPress={onPress}>
             <View style={styles.imageContainer}>
                 {hasImage && imageUrl ? (
                     <Image source={{ uri: imageUrl }} style={styles.productImage} resizeMode="cover" />
                 ) : (
-                    <View style={[styles.imagePlaceholder, { backgroundColor: isNight ? '#2A3442' : '#F0F0F0' }]}><FontAwesome5 name="box" size={32} color={subTextColor} /></View>
+                    <View style={[styles.imagePlaceholder, { backgroundColor: isNight ? '#2A3442' : '#F0F0F0' }]}>
+                        <FontAwesome5 name="box" size={32} color={subTextColor} />
+                    </View>
+                )}
+
+                {/* 锁定遮罩层 */}
+                {isLocked && (
+                    <View style={styles.lockedOverlay}>
+                        <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
+                        <ThemedText style={styles.lockedOverlayText}>予約キープ中</ThemedText>
+                    </View>
                 )}
             </View>
             <View style={styles.itemInfo}>
@@ -58,15 +72,8 @@ const ProductRow = React.memo(({ item, activeTab, isNight, cardBgColor, borderCo
                     <ThemedText style={[styles.itemTitleText, { color: textColor }]} numberOfLines={1}>
                         {item.title || '無題の商品'}
                     </ThemedText>
-                    
-                    {/* STRÄNGT VILLKOR: Visas BARA om priority är exakt true eller 1 */}
-                    {(item.priority === true || item.priority === 1) ? (
-                        <View style={styles.priorityTag}>
-                            <ThemedText style={styles.priorityTagText}>優先</ThemedText>
-                        </View>
-                    ) : null}
                 </View>
-                
+
                 <ThemedText style={[styles.itemDetail, { color: subTextColor }]}>状態：{item.quality || '未設定'}</ThemedText>
                 <View style={styles.locationContainer}>
                     <Ionicons name="location-outline" size={12} color={tabActiveColor} />
@@ -132,10 +139,10 @@ export default function ReuseScreen() {
     const isNight = selectedDesign === 'night';
     const isCafe = selectedDesign === 'cafe';
 
-    const cafeTextColor = '#4A3B32'; 
-    const cafeAccentColor = '#8fa288'; 
+    const cafeTextColor = '#4A3B32';
+    const cafeAccentColor = '#8fa288';
     const cafeBackgroundColor = '#F9F6F0';
-  
+
     const kawaiiTextColor = '#6B4E3C';
     const kawaiiAccentColor = '#A4C3A2';
     const kawaiiBackgroundColor = '#FCF5F0';
@@ -148,20 +155,20 @@ export default function ReuseScreen() {
     const cardBgColor = isNight ? '#1C2432' : isKawaii ? '#FCF6EA' : isCafe ? '#FFFDF9' : '#FFFFFF';
     const textColor = isNight ? '#FFFFFF' : isKawaii ? kawaiiTextColor : isCafe ? cafeTextColor : '#333333';
     const subTextColor = isNight ? '#E6E19D' : isKawaii ? '#8B5F65' : isCafe ? '#7A6B58' : '#666666';
-    
-const borderColor =
-  isNight
-    ? '#9288DA'      // Night
-    : isKawaii
-      ? '#fad5c2'    // Cute
-      : isCafe
-        ? '#C9A97E'  // Cafe
-        : '#E0E0E0'; // Normal
+
+    const borderColor =
+        isNight
+            ? '#9288DA'
+            : isKawaii
+                ? '#fad5c2'
+                : isCafe
+                    ? '#C9A97E'
+                    : '#E0E0E0';
 
     const tabBarBgColor = isNight ? '#1C2432' : isKawaii ? '#E6F0E3' : isCafe ? '#F2EBE3' : '#D1E0C5';
-    const tabActiveColor = isNight ? nightgreen : isKawaii ? kawaiiPeachPink : isCafe ? cafeAccentColor :  '#5B9E00';
+    const tabActiveColor = isNight ? nightgreen : isKawaii ? kawaiiPeachPink : isCafe ? cafeAccentColor : '#5B9E00';
     const tabInactiveColor = isNight ? '#7A8B9E' : isKawaii ? kawaiiPeachPink : isCafe ? '#B8A89A' : '#555555';
-    
+
     const isHomeActive = pathname === '/dashboard';
     const isCalendarActive = pathname === '/calendar';
     const isScanActive = pathname === '/scan';
@@ -317,7 +324,7 @@ const borderColor =
     }, [activeTab]);
 
     useEffect(() => {
-        fetchAllData(false); 
+        fetchAllData(false);
     }, [activeTab, fetchAllData]);
 
     useFocusEffect(
@@ -400,7 +407,7 @@ const borderColor =
     const renderListItem = useCallback(({ item }: { item: any }) => {
         if (activeTab === 'messages') {
             return (
-                <MessageRow 
+                <MessageRow
                     item={item}
                     isNight={isNight}
                     cardBgColor={cardBgColor}
@@ -409,13 +416,13 @@ const borderColor =
                     subTextColor={subTextColor}
                     tabActiveColor={tabActiveColor}
                     openDeleteModal={openDeleteModal}
-                    onPress={() => router.push(`/messages/${item.id}`)} 
+                    onPress={() => router.push(`/messages/${item.id}`)}
                 />
             );
         }
 
         return (
-            <ProductRow 
+            <ProductRow
                 item={item}
                 activeTab={activeTab}
                 isNight={isNight}
@@ -521,9 +528,14 @@ const borderColor =
             )}
 
             {activeTab !== 'messages' && (
-                <Pressable style={[styles.centerListingButton, { backgroundColor: isNight ? '#1C2432' : '#FFFFFF', borderColor: tabActiveColor, borderWidth: 1 }]} onPress={() => router.push('/reuse/create')}>
-                    <MaterialIcons name="add" size={20} color={tabActiveColor} />
-                    <ThemedText style={[styles.centerListingButtonText, { color: tabActiveColor }]}>出品する</ThemedText>
+                <Pressable
+                    style={[
+                        styles.centerListingButton,
+                        { backgroundColor: isNight ? '#1C2432' : '#FFFFFF', borderColor: tabActiveColor, borderWidth: 1 }
+                    ]}
+                    onPress={() => router.push('/reuse/create')}
+                >
+                    <MaterialIcons name="add" size={28} color={tabActiveColor} />
                 </Pressable>
             )}
 
@@ -547,7 +559,7 @@ const borderColor =
                             ゴミカレンダー
                         </ThemedText>
                     </Pressable>
-     
+
                     <View style={styles.scanWrapper}>
                         <Pressable style={[styles.scanButton, isScanActive && styles.tabIconCircleActive]} onPress={() => router.push('/scan')}>
                             <Ionicons name="scan-outline" size={26} color={isScanActive ? tabActiveColor : tabInactiveColor} />
@@ -565,7 +577,7 @@ const borderColor =
                             リユース
                         </ThemedText>
                     </Pressable>
-       
+
                     <Pressable style={styles.tabItem} onPress={() => router.push('/mypage')}>
                         <View style={[styles.tabIconCircle, isMyPageActive && styles.tabIconCircleActive]}>
                             <Ionicons name="person" size={22} color={isMyPageActive ? tabActiveColor : tabInactiveColor} />
@@ -595,7 +607,7 @@ const borderColor =
                             renderItem={({ item }) => {
                                 const isSelected = currentFilterMenu === 'ward' ? selectedWard === item : selectedCategory === item;
                                 return (
-                                    <Pressable 
+                                    <Pressable
                                         style={[styles.gridCapsule, { backgroundColor: isSelected ? tabActiveColor : (isNight ? '#2A3442' : '#F0F0F0') }]}
                                         onPress={() => {
                                             if (currentFilterMenu === 'ward') {
@@ -627,7 +639,7 @@ const borderColor =
                             {modalMode === 'delete_listing' ? '出品の削除' : 'チャットの削除'}
                         </ThemedText>
                         <ThemedText style={[styles.modalDescription, { color: subTextColor }]}>
-                            {modalMode === 'delete_listing' 
+                            {modalMode === 'delete_listing'
                                 ? `「${selectedTitle}」を削除してもよろしいですか？この操作は取り消せません。`
                                 : `「${selectedTitle}」とのチャットルームを削除してもよろしいですか？履歴も削除されます。`}
                         </ThemedText>
@@ -666,11 +678,28 @@ const styles = StyleSheet.create({
     emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: 40, marginTop: 40 },
     emptyText: { marginTop: 12, fontSize: 14, textAlign: 'center' },
     itemCard: { flexDirection: 'row', marginHorizontal: 12, marginBottom: 12, borderRadius: 12, padding: 12, alignItems: 'center' },
-    imageContainer: { width: 80, height: 80, borderRadius: 8, overflow: 'hidden' },
+    imageContainer: { width: 80, height: 80, borderRadius: 8, overflow: 'hidden', position: 'relative' },
     productImage: { width: '100%', height: '100%' },
     imagePlaceholder: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
+
+    // 👈 锁定状态遮罩样式
+    lockedOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 2,
+    },
+    lockedOverlayText: {
+        color: '#FFFFFF',
+        fontSize: 9,
+        fontWeight: 'bold',
+        marginTop: 2,
+        textAlign: 'center',
+    },
+
     itemInfo: { flex: 1, marginLeft: 12, justifyContent: 'center' },
-    
+
     titleRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -680,7 +709,7 @@ const styles = StyleSheet.create({
     },
     itemTitleText: { fontSize: 15, fontWeight: 'bold', maxWidth: '75%' },
     priorityTag: {
-        backgroundColor: '#FF9500', 
+        backgroundColor: '#FF9500',
         paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: 4,
@@ -715,8 +744,22 @@ const styles = StyleSheet.create({
     messageTitleText: { fontSize: 18, fontWeight: 'bold' },
     messageCountBadge: { marginLeft: 8, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
     messageCountBadgeText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
-    centerListingButton: { position: 'absolute', bottom: 95, left: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 33, paddingVertical: 10, borderRadius: 25, elevation: 4, shadowOpacity: 0.1, shadowRadius: 4 },
-    centerListingButtonText: { fontSize: 14, fontWeight: 'bold', marginLeft: 4 },
+    centerListingButton: {
+        position: 'absolute',
+        bottom: 95,
+        left: '50%',
+        transform: [{ translateX: -28 }],
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+    },
 
     tabBarContainer: {
         position: 'absolute',

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Pressable, ScrollView, Image, ActivityIndicator, Modal, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import { supabase } from '@/lib/supabase'; 
+import { supabase } from '@/lib/supabase';
 
 
 import { useAppTheme } from '../tema/ThemeContext';
@@ -15,10 +15,10 @@ export default function ReuseDetailScreen() {
     const isNight = selectedDesign === 'night';
     const isCafe = selectedDesign === 'cafe';
 
-    const cafeTextColor = '#4A3B32'; 
-    const cafeAccentColor = '#8B5E3C'; 
+    const cafeTextColor = '#4A3B32';
+    const cafeAccentColor = '#8B5E3C';
     const cafeBackgroundColor = '#F9F6F0';
-  
+
     const kawaiiTextColor = '#6B4E3C';
     const kawaiiBackgroundColor = '#FCF5F0';
     const kawaiiPeachPink = '#F4A396';
@@ -31,16 +31,18 @@ export default function ReuseDetailScreen() {
     const textColor = isNight ? '#FFFFFF' : isKawaii ? kawaiiTextColor : isCafe ? cafeTextColor : '#1A1A1A';
     const subTextColor = isNight ? '#E6E19D' : isKawaii ? '#8B5F65' : isCafe ? '#7A6B58' : '#666666';
     const borderColor = isNight ? nightPurple : '#E0E0E0';
-    
+
     const activeAccentColor = isNight ? nightPurple : isKawaii ? kawaiiPeachPink : isCafe ? cafeAccentColor : '#5B9E00';
     const chatButtonColor = isNight ? nightPurple : isKawaii ? '#A4C3A2' : isCafe ? '#8B5E3C' : '#76C800';
     const activeBtnTextColor = isNight ? '#000000' : '#FFFFFF';
+    // 1. 补上缺失的 tabActiveColor 变量
+    const tabActiveColor = activeAccentColor;
 
 
     const [isLoading, setIsLoading] = useState(true);
     const [itemData, setItemData] = useState<any>(null);
-    const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
-    const [isFavorited, setIsFavorited] = useState(false); 
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [isFavorited, setIsFavorited] = useState(false);
 
     const [confirmVisible, setConfirmVisible] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -231,22 +233,22 @@ export default function ReuseDetailScreen() {
     return (
         <View style={[styles.mainWrapper, { backgroundColor: mainBackgroundColor }]}>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                
-             
-<View style={styles.topHeaderActions}>
-<Pressable
-    style={styles.backButton}
-    onPress={() => {
-        if (router.canGoBack()) {
-            router.back();
-        } else {
-            router.replace('/reuse');
-        }
-    }}
->
-    <Ionicons name="chevron-back" size={28} color={textColor} />
-</Pressable>
-</View>
+
+
+                <View style={styles.topHeaderActions}>
+                    <Pressable
+                        style={styles.backButton}
+                        onPress={() => {
+                            if (router.canGoBack()) {
+                                router.back();
+                            } else {
+                                router.replace('/reuse');
+                            }
+                        }}
+                    >
+                        <Ionicons name="chevron-back" size={28} color={textColor} />
+                    </Pressable>
+                </View>
 
                 <View style={[styles.imageWrapper, { borderColor: borderColor, borderWidth: isNight ? 1 : 0, borderRadius: 24 }]}>
                     {imageList.length > 0 ? (
@@ -266,8 +268,17 @@ export default function ReuseDetailScreen() {
                     )}
                 </View>
 
+                {/* 标题 + 优先度徽章 */}
                 <View style={styles.titleContainer}>
                     <Text style={[styles.detailTitle, { color: textColor }]}>{itemData.title}</Text>
+
+                    {/* 2. 只要 priority > 0 就展示亮眼的高亮标签 */}
+                    {itemData.priority > 0 && (
+                        <View style={styles.priorityBadge}>
+                            <Ionicons name="flash" size={12} color="#FFFFFF" />
+                            <Text style={styles.priorityBadgeText}>優先度 Lv.{itemData.priority}</Text>
+                        </View>
+                    )}
                 </View>
 
                 <View style={[styles.descriptionContainer, { backgroundColor: descriptionBgColor, borderColor: borderColor, borderWidth: isNight ? 1 : 0 }]}>
@@ -285,7 +296,7 @@ export default function ReuseDetailScreen() {
                                 <Text style={{ color: activeBtnTextColor }}>{isLocked ? 'ロック解除' : 'キープ'}</Text>
                             </Pressable>
                         </View>
-                        
+
                         <Pressable style={[styles.manageDeleteButton, { borderColor: '#FCA5A5', borderWidth: 1 }]} onPress={() => setConfirmVisible(true)}>
                             <Text style={{ color: '#E95757' }}>この出品を削除する</Text>
                         </Pressable>
@@ -302,13 +313,16 @@ export default function ReuseDetailScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.customAlertBox, { backgroundColor: cardBgColor }]}>
                         <Text style={[styles.alertTitle, { color: textColor }]}>出品の削除</Text>
-                        <Text style={[styles.alertMessage, { color: subTextColor }]}>削除しますか？</Text>
+                        <Text style={[styles.alertMessage, { color: subTextColor }]}>この操作は取り消せません。削除しますか？</Text>
                         <View style={styles.alertButtonRow}>
                             <Pressable style={styles.alertCancelButton} onPress={() => setConfirmVisible(false)}>
                                 <Text style={{ color: isNight ? '#FFF' : '#666' }}>キャンセル</Text>
                             </Pressable>
-                            <Pressable style={styles.alertConfirmButton} onPress={executeDelete}>
-                                <Text style={{ color: '#FFF' }}>削除</Text>
+                            <Pressable
+                                style={[styles.alertConfirmButton, { backgroundColor: '#FF4D4F' }]}
+                                onPress={executeDelete}
+                            >
+                                <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>削除</Text>
                             </Pressable>
                         </View>
                     </View>
@@ -341,7 +355,7 @@ export default function ReuseDetailScreen() {
                 </View>
             </Modal>
 
-         
+
             <Modal transparent={true} animationType="fade" visible={isDeleting || isActionLoading}>
                 <View style={styles.modalOverlay}>
                     <View style={[styles.loaderContainer, { backgroundColor: cardBgColor, padding: 30, borderRadius: 16, alignItems: 'center' }]}>
@@ -365,8 +379,33 @@ const styles = StyleSheet.create({
     productBigImage: { width: '100%', height: '100%', borderRadius: 24, resizeMode: 'cover' },
     lockedImageOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.55)', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
     lockedOverlayText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-    titleContainer: { marginBottom: 14 },
-    detailTitle: { fontSize: 24, fontWeight: '800' },
+    titleContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between', // 让标题和优先度标签两端对齐
+        marginBottom: 14
+    },
+    detailTitle: {
+        fontSize: 24,
+        fontWeight: '800',
+        flex: 1,
+        marginRight: 10,
+    },
+    // 优先度徽章样式
+    priorityBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FF9500', // 闪电橙色
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 3,
+    },
+    priorityBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
     descriptionContainer: { padding: 20, borderRadius: 16, marginBottom: 35 },
     myManagementPanel: { width: '100%', gap: 14, marginBottom: 30 },
     actionButtonRow: { flexDirection: 'row', gap: 12 },
@@ -377,24 +416,24 @@ const styles = StyleSheet.create({
     customAlertBox: { width: '85%', maxWidth: 320, borderRadius: 24, padding: 22, alignItems: 'center' },
     alertTitle: { fontSize: 18, fontWeight: '800', marginBottom: 10 },
     alertMessage: { fontSize: 13, marginBottom: 24, textAlign: 'center' },
-    alertButtonRow: { 
-        flexDirection: 'column', 
-        width: '100%',           
-        gap: 10,                 
+    alertButtonRow: {
+        flexDirection: 'column',
+        width: '100%',
+        gap: 10,
     },
-    alertCancelButton: { 
-        width: '100%',           
-        paddingVertical: 14,     
-        borderRadius: 16, 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        backgroundColor: '#F5F5F5' 
+    alertCancelButton: {
+        width: '100%',
+        paddingVertical: 14,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#F5F5F5'
     },
-    alertConfirmButton: { 
-        width: '100%',           
-        paddingVertical: 14, 
-        borderRadius: 16, 
-        alignItems: 'center', 
+    alertConfirmButton: {
+        width: '100%',
+        paddingVertical: 14,
+        borderRadius: 16,
+        alignItems: 'center',
         justifyContent: 'center',
     },
     loadingCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
