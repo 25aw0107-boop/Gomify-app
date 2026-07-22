@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 
-
 import { useAppTheme } from '../tema/ThemeContext';
 
 export default function ReuseDetailScreen() {
@@ -35,9 +34,6 @@ export default function ReuseDetailScreen() {
     const activeAccentColor = isNight ? nightPurple : isKawaii ? kawaiiPeachPink : isCafe ? cafeAccentColor : '#5B9E00';
     const chatButtonColor = isNight ? nightPurple : isKawaii ? '#A4C3A2' : isCafe ? '#8B5E3C' : '#76C800';
     const activeBtnTextColor = isNight ? '#000000' : '#FFFFFF';
-    // 1. 补上缺失的 tabActiveColor 变量
-    const tabActiveColor = activeAccentColor;
-
 
     const [isLoading, setIsLoading] = useState(true);
     const [itemData, setItemData] = useState<any>(null);
@@ -61,7 +57,6 @@ export default function ReuseDetailScreen() {
         title: '',
         message: '',
     });
-
 
     const fetchItemDetailAndUser = async () => {
         if (!id) return;
@@ -134,7 +129,6 @@ export default function ReuseDetailScreen() {
             try {
                 const nextPriority = currentPriority + 1;
 
-                // 💡 UPPDATERING: Sparar nu ändringen på riktigt i Supabase!
                 const { error } = await supabase
                     .from('items')
                     .update({ priority: nextPriority })
@@ -234,7 +228,7 @@ export default function ReuseDetailScreen() {
         <View style={[styles.mainWrapper, { backgroundColor: mainBackgroundColor }]}>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-
+                {/* 顶部返回按钮 */}
                 <View style={styles.topHeaderActions}>
                     <Pressable
                         style={styles.backButton}
@@ -250,6 +244,7 @@ export default function ReuseDetailScreen() {
                     </Pressable>
                 </View>
 
+                {/* 主图区 */}
                 <View style={[styles.imageWrapper, { borderColor: borderColor, borderWidth: isNight ? 1 : 0, borderRadius: 24 }]}>
                     {imageList.length > 0 ? (
                         <View style={styles.imageContainerInner}>
@@ -268,23 +263,50 @@ export default function ReuseDetailScreen() {
                     )}
                 </View>
 
-                {/* 标题 + 优先度徽章 */}
-                <View style={styles.titleContainer}>
-                    <Text style={[styles.detailTitle, { color: textColor }]}>{itemData.title}</Text>
+                {/* 1. 标题独占整行 + 下方标签展示 */}
+                <View style={styles.headerInfoSection}>
+                    {/* 独占一行的大标题 */}
+                    <Text style={[styles.detailTitle, { color: textColor }]}>
+                        {itemData.title}
+                    </Text>
 
-                    {/* 2. 只要 priority > 0 就展示亮眼的高亮标签 */}
-                    {itemData.priority > 0 && (
-                        <View style={styles.priorityBadge}>
-                            <Ionicons name="flash" size={12} color="#FFFFFF" />
-                            <Text style={styles.priorityBadgeText}>優先度 Lv.{itemData.priority}</Text>
-                        </View>
-                    )}
+                    {/* 下方的标签行：位置信息(左) + 优先度(右) */}
+                    <View style={styles.tagsRow}>
+                        {/* 位置 UI */}
+                        {(itemData.ward || itemData.station) && (
+                            <View style={styles.locationContainer}>
+                                <Ionicons name="location-outline" size={15} color={kawaiiPeachPink} style={{ marginRight: 3 }} />
+                                {!!itemData.ward && (
+                                    <Text style={[styles.locationWardText, { color: textColor }]}>
+                                        {itemData.ward}
+                                    </Text>
+                                )}
+                                {!!itemData.station && (
+                                    <Text style={[styles.locationStationText, { color: subTextColor }]}>
+                                        {` (${itemData.station})`}
+                                    </Text>
+                                )}
+                            </View>
+                        )}
+
+                        {/* 优先度徽章 */}
+                        {itemData.priority > 0 && (
+                            <View style={styles.priorityBadge}>
+                                <Ionicons name="flash" size={12} color="#FFFFFF" />
+                                <Text style={styles.priorityBadgeText}>優先度 Lv.{itemData.priority}</Text>
+                            </View>
+                        )}
+                    </View>
                 </View>
 
+                {/* 详情描述框 */}
                 <View style={[styles.descriptionContainer, { backgroundColor: descriptionBgColor, borderColor: borderColor, borderWidth: isNight ? 1 : 0 }]}>
-                    <Text style={{ color: isNight ? '#D1D5DB' : '#444444' }}>{itemData.description}</Text>
+                    <Text style={[styles.descriptionText, { color: isNight ? '#D1D5DB' : '#444444' }]}>
+                        {itemData.description}
+                    </Text>
                 </View>
 
+                {/* 操作按钮组 */}
                 {isMyOwnItem ? (
                     <View style={styles.myManagementPanel}>
                         <View style={styles.actionButtonRow}>
@@ -303,12 +325,12 @@ export default function ReuseDetailScreen() {
                     </View>
                 ) : (
                     <Pressable style={[styles.chatButton, { backgroundColor: chatButtonColor }]} onPress={handleStartChat}>
-                        <Text style={{ color: activeBtnTextColor, fontWeight: 'bold' }}>チャットで相談</Text>
+                        <Text style={{ color: activeBtnTextColor, fontWeight: 'bold', fontSize: 16 }}>チャットで相談</Text>
                     </Pressable>
                 )}
             </ScrollView>
 
-            {/* 1. 削除確認 Modal */}
+            {/* Modal - 削除確認 */}
             <Modal transparent={true} animationType="fade" visible={confirmVisible} onRequestClose={() => setConfirmVisible(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={[styles.customAlertBox, { backgroundColor: cardBgColor }]}>
@@ -329,7 +351,7 @@ export default function ReuseDetailScreen() {
                 </View>
             </Modal>
 
-
+            {/* Modal - 自定义提示框 */}
             <Modal transparent={true} animationType="fade" visible={customAlert.visible} onRequestClose={() => setCustomAlert(prev => ({ ...prev, visible: false }))}>
                 <View style={styles.modalOverlay}>
                     <View style={[styles.customAlertBox, { backgroundColor: cardBgColor }]}>
@@ -355,7 +377,7 @@ export default function ReuseDetailScreen() {
                 </View>
             </Modal>
 
-
+            {/* Modal - 加载遮罩 */}
             <Modal transparent={true} animationType="fade" visible={isDeleting || isActionLoading}>
                 <View style={styles.modalOverlay}>
                     <View style={[styles.loaderContainer, { backgroundColor: cardBgColor, padding: 30, borderRadius: 16, alignItems: 'center' }]}>
@@ -373,29 +395,47 @@ const styles = StyleSheet.create({
     scrollContent: { paddingHorizontal: 24, paddingTop: 50, paddingBottom: 40 },
     topHeaderActions: { flexDirection: 'row', marginBottom: 12 },
     backButton: { width: 40, height: 40, justifyContent: 'center' },
-    imageWrapper: { width: '100%', height: 280, marginBottom: 24 },
+    imageWrapper: { width: '100%', height: 280, marginBottom: 20 },
     imageContainerInner: { width: '100%', height: '100%', position: 'relative' },
     imagePlaceholder: { width: '100%', height: '100%', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
     productBigImage: { width: '100%', height: '100%', borderRadius: 24, resizeMode: 'cover' },
     lockedImageOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.55)', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
     lockedOverlayText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-    titleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between', // 让标题和优先度标签两端对齐
-        marginBottom: 14
+
+    // --- 顶部头部信息区域（纵向布局） ---
+    headerInfoSection: {
+        marginBottom: 18,
     },
+    // 标题单独占行
     detailTitle: {
         fontSize: 24,
         fontWeight: '800',
-        flex: 1,
-        marginRight: 10,
+        lineHeight: 32,
+        marginBottom: 12,
     },
-    // 优先度徽章样式
+    // 标签容器（在标题下方）
+    tagsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    // 位置信息
+    locationContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    locationWardText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    locationStationText: {
+        fontSize: 14,
+    },
+    // 优先度徽章
     priorityBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FF9500', // 闪电橙色
+        backgroundColor: '#FF9500',
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 12,
@@ -406,7 +446,19 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: 'bold',
     },
-    descriptionContainer: { padding: 20, borderRadius: 16, marginBottom: 35 },
+
+    // 描述框
+    descriptionContainer: {
+        padding: 20,
+        borderRadius: 16,
+        marginBottom: 28,
+    },
+    descriptionText: {
+        fontSize: 14,
+        lineHeight: 22,
+    },
+
+    // 底部操作面板
     myManagementPanel: { width: '100%', gap: 14, marginBottom: 30 },
     actionButtonRow: { flexDirection: 'row', gap: 12 },
     inlineActionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 20, gap: 6 },
