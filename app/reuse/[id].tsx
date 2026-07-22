@@ -118,6 +118,7 @@ export default function ReuseDetailScreen() {
         }
     };
 
+    // ----- 修改后的积分扣除与优先度提升函数 -----
     const handlePromoteItem = async () => {
         if (!currentUserId || !itemData) return;
         const COST_POINTS = 2;
@@ -126,16 +127,51 @@ export default function ReuseDetailScreen() {
         const startBoosting = async () => {
             setCustomAlert(prev => ({ ...prev, visible: false }));
             setIsActionLoading(true);
-            try {
-                const nextPriority = currentPriority + 1;
 
-                const { error } = await supabase
+            try {
+                // 1. 查询数据库中用户当前的实际积分
+                const { data: profile, error: profileFetchError } = await supabase
+                    .from('profiles')
+                    .select('points')
+                    .eq('id', currentUserId)
+                    .single();
+
+                if (profileFetchError) throw profileFetchError;
+
+                const currentPoints = profile?.points ?? 0;
+
+                // 2. 判断积分是否足够
+                if (currentPoints < COST_POINTS) {
+                    setTimeout(() => {
+                        setCustomAlert({
+                            visible: true,
+                            type: 'error',
+                            title: 'ポイント不足',
+                            message: `ポイントが不足しています。（現在のポイント: ${currentPoints} Pt）`
+                        });
+                    }, 100);
+                    return;
+                }
+
+                // 3. 扣除数据库中的积分
+                const updatedPoints = currentPoints - COST_POINTS;
+                const { error: updatePointsError } = await supabase
+                    .from('profiles')
+                    .update({ points: updatedPoints })
+                    .eq('id', currentUserId);
+
+                if (updatePointsError) throw updatePointsError;
+
+                // 4. 更新商品的优先度 (priority + 1)
+                const nextPriority = currentPriority + 1;
+                const { error: updateItemError } = await supabase
                     .from('items')
                     .update({ priority: nextPriority })
                     .eq('id', id);
 
-                if (error) throw error;
+                if (updateItemError) throw updateItemError;
 
+                // 5. 更新本地 state
                 setItemData({ ...itemData, priority: nextPriority });
 
                 setTimeout(() => {
@@ -143,7 +179,7 @@ export default function ReuseDetailScreen() {
                         visible: true,
                         type: 'success',
                         title: '引き上げ成功！',
-                        message: `商品の優先度を ${nextPriority} に引き上げました！`,
+                        message: `2ポイントを消費して、商品の優先度を Lv.${nextPriority} に引き上げました！`,
                         onConfirm: () => {
                             setCustomAlert(prev => ({ ...prev, visible: false }));
                             router.replace('/reuse');
@@ -151,13 +187,13 @@ export default function ReuseDetailScreen() {
                     });
                 }, 100);
             } catch (err: any) {
-                console.error("Uppdatering av prioritet misslyckades:", err);
+                console.error("Prioritet och poäng uppdatering misslyckades:", err);
                 setTimeout(() => {
                     setCustomAlert({
                         visible: true,
                         type: 'error',
                         title: '引き上げ失敗',
-                        message: 'ポイントが不足しているか、処理に失敗しました。'
+                        message: '処理中にエラーが発生しました。もう一度お試しください。'
                     });
                 }, 100);
             } finally {
@@ -402,24 +438,20 @@ const styles = StyleSheet.create({
     lockedImageOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.55)', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
     lockedOverlayText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
 
-    // --- 顶部头部信息区域（纵向布局） ---
     headerInfoSection: {
         marginBottom: 18,
     },
-    // 标题单独占行
     detailTitle: {
         fontSize: 24,
         fontWeight: '800',
         lineHeight: 32,
         marginBottom: 12,
     },
-    // 标签容器（在标题下方）
     tagsRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
     },
-    // 位置信息
     locationContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -431,7 +463,6 @@ const styles = StyleSheet.create({
     locationStationText: {
         fontSize: 14,
     },
-    // 优先度徽章
     priorityBadge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -447,7 +478,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
 
-    // 描述框
     descriptionContainer: {
         padding: 20,
         borderRadius: 16,
@@ -458,7 +488,6 @@ const styles = StyleSheet.create({
         lineHeight: 22,
     },
 
-    // 底部操作面板
     myManagementPanel: { width: '100%', gap: 14, marginBottom: 30 },
     actionButtonRow: { flexDirection: 'row', gap: 12 },
     inlineActionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 20, gap: 6 },
