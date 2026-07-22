@@ -1,32 +1,72 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Pressable, ScrollView, Image, ActivityIndicator, Modal, Platform } from 'react-native';
+import { StyleSheet, View, Pressable, ScrollView, Image, ActivityIndicator, Modal, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons, FontAwesome5, Octicons, Feather } from '@expo/vector-icons';
-import { ThemedText } from '@/components/themed-text';
-import { supabase } from '@/lib/supabase'; // 🔐 Supabase 客户端
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { supabase } from '@/lib/supabase'; 
+
+
+import { useAppTheme } from '../tema/ThemeContext';
 
 export default function ReuseDetailScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams();
+    const { selectedDesign } = useAppTheme();
+    const isKawaii = selectedDesign === 'cute';
+    const isNight = selectedDesign === 'night';
+    const isCafe = selectedDesign === 'cafe';
+
+    const cafeTextColor = '#4A3B32'; 
+    const cafeAccentColor = '#8B5E3C'; 
+    const cafeBackgroundColor = '#F9F6F0';
+  
+    const kawaiiTextColor = '#6B4E3C';
+    const kawaiiBackgroundColor = '#FCF5F0';
+    const kawaiiPeachPink = '#F4A396';
+
+    const nightPurple = '#9288da';
+
+    const mainBackgroundColor = isNight ? '#000000' : isKawaii ? kawaiiBackgroundColor : isCafe ? cafeBackgroundColor : '#FFFFFF';
+    const cardBgColor = isNight ? '#1C2432' : isKawaii ? '#FCF6EA' : isCafe ? '#FFFDF9' : '#FFFFFF';
+    const descriptionBgColor = isNight ? '#111622' : isKawaii ? '#FFFDF9' : isCafe ? '#FAF9F6' : '#FAF9F6';
+    const textColor = isNight ? '#FFFFFF' : isKawaii ? kawaiiTextColor : isCafe ? cafeTextColor : '#1A1A1A';
+    const subTextColor = isNight ? '#E6E19D' : isKawaii ? '#8B5F65' : isCafe ? '#7A6B58' : '#666666';
+    const borderColor = isNight ? nightPurple : '#E0E0E0';
+    
+    const activeAccentColor = isNight ? nightPurple : isKawaii ? kawaiiPeachPink : isCafe ? cafeAccentColor : '#5B9E00';
+    const chatButtonColor = isNight ? nightPurple : isKawaii ? '#A4C3A2' : isCafe ? '#8B5E3C' : '#76C800';
+    const activeBtnTextColor = isNight ? '#000000' : '#FFFFFF';
+
 
     const [isLoading, setIsLoading] = useState(true);
     const [itemData, setItemData] = useState<any>(null);
-    const [currentUserId, setCurrentUserId] = useState<string | null>(null); // 👤 存储当前登录用户的ID
-    const [isFavorited, setIsFavorited] = useState(false); // ❤️ 收藏状态
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
+    const [isFavorited, setIsFavorited] = useState(false); 
 
     const [confirmVisible, setConfirmVisible] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isActionLoading, setIsActionLoading] = useState(false);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-    // --- 🌍 拉取 Supabase 数据 ---
+    const [customAlert, setCustomAlert] = useState<{
+        visible: boolean;
+        type: 'confirm' | 'success' | 'error';
+        title: string;
+        message: string;
+        onConfirm?: () => void;
+    }>({
+        visible: false,
+        type: 'success',
+        title: '',
+        message: '',
+    });
+
+
     const fetchItemDetailAndUser = async () => {
         if (!id) return;
-
         setIsLoading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                setCurrentUserId(user.id);
-            }
+            if (user) setCurrentUserId(user.id);
 
             const { data, error } = await supabase
                 .from('items')
@@ -58,19 +98,12 @@ export default function ReuseDetailScreen() {
         fetchItemDetailAndUser();
     }, [id]);
 
-    // 🎯 彻底删除商品
     const executeDelete = async () => {
         setConfirmVisible(false);
         setIsDeleting(true);
-
         try {
-            const { error } = await supabase
-                .from('items')
-                .delete()
-                .eq('id', id);
-
+            const { error } = await supabase.from('items').delete().eq('id', id);
             if (error) throw error;
-
             setIsDeleting(false);
             if (router.canGoBack()) {
                 router.back();
@@ -79,603 +112,292 @@ export default function ReuseDetailScreen() {
             }
         } catch (err: any) {
             setIsDeleting(false);
-            console.error('削除失敗:', err);
-            alert("削除に失敗しました。時間をおいて再度お試しください。");
+            setCustomAlert({
+                visible: true,
+                type: 'error',
+                title: 'エラー',
+                message: '削除に失敗しました。'
+            });
         }
     };
 
-    // ❤️ 切换收藏状态
-    const toggleFavorite = async () => {
+    const handlePromoteItem = async () => {
         if (!currentUserId || !itemData) return;
+        const COST_POINTS = 2;
+        const currentPriority = itemData.priority ?? 0;
 
-        try {
-            if (isFavorited) {
-                await supabase
-                    .from('favorites')
-                    .delete()
-                    .eq('user_id', currentUserId)
-                    .eq('item_id', itemData.id);
-                setIsFavorited(false);
-            } else {
-                await supabase
-                    .from('favorites')
-                    .insert({ user_id: currentUserId, item_id: itemData.id });
-                setIsFavorited(true);
+        const startBoosting = async () => {
+            setCustomAlert(prev => ({ ...prev, visible: false }));
+            setIsActionLoading(true);
+            try {
+                const nextPriority = currentPriority + 1;
+
+                // 💡 UPPDATERING: Sparar nu ändringen på riktigt i Supabase!
+                const { error } = await supabase
+                    .from('items')
+                    .update({ priority: nextPriority })
+                    .eq('id', id);
+
+                if (error) throw error;
+
+                setItemData({ ...itemData, priority: nextPriority });
+
+                setTimeout(() => {
+                    setCustomAlert({
+                        visible: true,
+                        type: 'success',
+                        title: '引き上げ成功！',
+                        message: `商品の優先度を ${nextPriority} に引き上げました！`,
+                        onConfirm: () => {
+                            setCustomAlert(prev => ({ ...prev, visible: false }));
+                            router.replace('/reuse');
+                        }
+                    });
+                }, 100);
+            } catch (err: any) {
+                console.error("Uppdatering av prioritet misslyckades:", err);
+                setTimeout(() => {
+                    setCustomAlert({
+                        visible: true,
+                        type: 'error',
+                        title: '引き上げ失敗',
+                        message: 'ポイントが不足しているか、処理に失敗しました。'
+                    });
+                }, 100);
+            } finally {
+                setIsActionLoading(false);
             }
+        };
+
+        setCustomAlert({
+            visible: true,
+            type: 'confirm',
+            title: '優先度の引き上げ',
+            message: `${COST_POINTS}ポイントを消費して、表示順位を上げますか？`,
+            onConfirm: startBoosting
+        });
+    };
+
+    const handleToggleLock = async () => {
+        if (!itemData) return;
+        const nextStatus = itemData.status === 'locked' ? 'available' : 'locked';
+        setIsActionLoading(true);
+        try {
+            const { error } = await supabase.from('items').update({ status: nextStatus }).eq('id', itemData.id);
+            if (error) throw error;
+            setItemData({ ...itemData, status: nextStatus });
         } catch (err) {
-            console.error('收藏操作失敗:', err);
+            console.error(err);
+        } finally {
+            setIsActionLoading(false);
         }
     };
 
     const handleStartChat = async () => {
         if (!itemData || !currentUserId) return;
-
         try {
-            // 1. 检查当前买家和该商品卖家之间是否已经存在聊天室
-            const { data: existingRoom, error: fetchError } = await supabase
-                .from('chat_rooms')
-                .select('id')
-                .eq('item_id', itemData.id)
-                .eq('buyer_id', currentUserId)
-                .maybeSingle();
-
-            let finalRoomId = '';
-
-            if (existingRoom) {
-                // 2. 如果房间已经存在，直接使用已有的 roomId
-                finalRoomId = existingRoom.id;
-            } else {
-                // 3. 如果是第一次聊天，自动在 chat_rooms 表中创建新房间
-                const { data: newRoom, error: createError } = await supabase
-                    .from('chat_rooms')
-                    .insert({
-                        item_id: itemData.id,
-                        buyer_id: currentUserId,
-                        seller_id: itemData.user_id // 卖家 ID
-                    })
-                    .select('id')
-                    .single();
-
-                if (createError) throw createError;
-                if (newRoom) {
-                    finalRoomId = newRoom.id;
-                }
+            const { data: existingRoom } = await supabase.from('chat_rooms').select('id').eq('item_id', itemData.id).eq('buyer_id', currentUserId).maybeSingle();
+            let roomId = existingRoom?.id;
+            if (!roomId) {
+                const { data: newRoom } = await supabase.from('chat_rooms').insert({ item_id: itemData.id, buyer_id: currentUserId, seller_id: itemData.user_id }).select('id').single();
+                roomId = newRoom?.id;
             }
-
-            // 4. 🚀 关键修改点：丝滑跳转到你的聊天详情页！
-            if (finalRoomId) {
-                router.push({
-                    // 💡 注意：这里直接把 finalRoomId 拼接到路径里，对应 app/messages/[id].tsx
-                    pathname: `/messages/${finalRoomId}`,
-                    params: {
-                        itemId: itemData.id,            // 捎带传递关联的商品 ID
-                        targetUserId: itemData.user_id  // 捎带传递对方的用户 ID
-                    }
-                });
-            }
+            if (roomId) router.push(`/messages/${roomId}`);
         } catch (err) {
-            console.error('无法开启聊天室:', err);
-            alert('开启聊天失败，请稍后再试。');
+            console.error(err);
         }
     };
 
     if (isLoading) {
         return (
-            <View style={styles.loadingCenter}>
-                <ActivityIndicator size="large" color="#5B9E00" />
+            <View style={[styles.loadingCenter, { backgroundColor: mainBackgroundColor }]}>
+                <ActivityIndicator size="large" color={activeAccentColor} />
             </View>
         );
     }
 
     if (!itemData) {
         return (
-            <View style={styles.errorCenter}>
-                <ThemedText style={styles.errorText}>商品が見つかりませんでした。</ThemedText>
-                <Pressable style={styles.errorButton} onPress={() => router.back()}>
-                    <ThemedText style={styles.errorButtonText}>戻る</ThemedText>
-                </Pressable>
+            <View style={[styles.errorCenter, { backgroundColor: mainBackgroundColor }]}>
+                <Text style={{ color: textColor }}>商品が見つかりませんでした。</Text>
             </View>
         );
     }
 
-    const hasImage = itemData.images && itemData.images.length > 0;
-    const imageUrl = hasImage ? itemData.images[0] : null;
+    const imageList = Array.isArray(itemData.images) ? itemData.images : [];
     const isMyOwnItem = currentUserId === itemData.user_id;
+    const isLocked = itemData.status === 'locked';
 
     return (
-        <View style={styles.mainWrapper}>
+        <View style={[styles.mainWrapper, { backgroundColor: mainBackgroundColor }]}>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                
+             
+<View style={styles.topHeaderActions}>
+<Pressable
+    style={styles.backButton}
+    onPress={() => {
+        if (router.canGoBack()) {
+            router.back();
+        } else {
+            router.replace('/reuse');
+        }
+    }}
+>
+    <Ionicons name="chevron-back" size={28} color={textColor} />
+</Pressable>
+</View>
 
-                {/* 顶部返回行 */}
-                <View style={styles.topHeaderActions}>
-                    <Pressable style={styles.backButton} onPress={() => router.back()}>
-                        <Ionicons name="chevron-back" size={28} color="#222" />
-                    </Pressable>
-                </View>
-
-                {/* 商品大图 */}
-                <View style={styles.imageWrapper}>
-                    {hasImage ? (
-                        <Image source={{ uri: imageUrl }} style={styles.productBigImage} />
+                <View style={[styles.imageWrapper, { borderColor: borderColor, borderWidth: isNight ? 1 : 0, borderRadius: 24 }]}>
+                    {imageList.length > 0 ? (
+                        <View style={styles.imageContainerInner}>
+                            <Image source={{ uri: imageList[currentImageIndex] }} style={styles.productBigImage} />
+                            {isLocked && (
+                                <View style={styles.lockedImageOverlay}>
+                                    <Ionicons name="lock-closed" size={40} color="#FFF" />
+                                    <Text style={styles.lockedOverlayText}>予約キープ中</Text>
+                                </View>
+                            )}
+                        </View>
                     ) : (
-                        <View style={styles.imagePlaceholder}>
-                            <FontAwesome5 name="bicycle" size={80} color="#bbb" />
+                        <View style={[styles.imagePlaceholder, { backgroundColor: isNight ? '#1C2432' : '#F4F3EF' }]}>
+                            <FontAwesome5 name="bicycle" size={80} color={isNight ? nightPurple : '#bbb'} />
                         </View>
                     )}
                 </View>
 
-                {/* 大标题 */}
                 <View style={styles.titleContainer}>
-                    <ThemedText style={styles.detailTitle}>{itemData.title || '無題の商品'}</ThemedText>
+                    <Text style={[styles.detailTitle, { color: textColor }]}>{itemData.title}</Text>
                 </View>
 
-                {/* 📌 状态行：通过两端对齐，让爱心保持在最右侧 */}
-                <View style={styles.infoMetaRow}>
-                    <View style={styles.metaLeftBadges}>
-                        <View style={styles.metaBadge}>
-                            <Ionicons name="location-sharp" size={16} color="#5B9E00" />
-                            <ThemedText style={styles.metaText}>{itemData.station || '未設定'}</ThemedText>
-                        </View>
-
-                        <View style={styles.metaBadge}>
-                            <Ionicons name="pricetag" size={14} color="#5B9E00" style={styles.tagIconStyle} />
-                            <ThemedText style={styles.metaText}>状態：{itemData.quality || '指定なし'}</ThemedText>
-                        </View>
-                    </View>
-
-                    {/* ✨ 右侧极端对齐：改用绝对稳定的 Ionicons 库，彻底告别错误问号 */}
-                    {!isMyOwnItem && (
-                        <Pressable
-                            style={[
-                                styles.favoriteCircleButton,
-                                isFavorited && styles.favoriteCircleButtonActive
-                            ]}
-                            onPress={toggleFavorite}
-                        >
-                            <Ionicons
-                                name={isFavorited ? "heart" : "heart-outline"}
-                                size={20}
-                                color={isFavorited ? "#FA5A5A" : "#888888"}
-                            />
-                        </Pressable>
-                    )}
+                <View style={[styles.descriptionContainer, { backgroundColor: descriptionBgColor, borderColor: borderColor, borderWidth: isNight ? 1 : 0 }]}>
+                    <Text style={{ color: isNight ? '#D1D5DB' : '#444444' }}>{itemData.description}</Text>
                 </View>
 
-                {/* 描述文本 */}
-                <View style={styles.descriptionContainer}>
-                    <ThemedText style={styles.detailDescription}>
-                        {itemData.description || '詳細な説明はありません。'}
-                    </ThemedText>
-                </View>
-
-                {/* 底部按钮切换 */}
                 {isMyOwnItem ? (
-                    <Pressable style={styles.manageButton} onPress={() => setConfirmVisible(true)}>
-                        <Feather name="trash-2" size={20} color="#FFF" />
-                        <ThemedText style={styles.manageButtonText}>この出品を削除する</ThemedText>
-                    </Pressable>
+                    <View style={styles.myManagementPanel}>
+                        <View style={styles.actionButtonRow}>
+                            <Pressable style={[styles.inlineActionButton, { backgroundColor: isNight ? '#2A1F10' : '#FFF8EB', borderColor: isNight ? '#FF9500' : '#FFE2B3' }]} onPress={handlePromoteItem}>
+                                <Ionicons name="flash" size={18} color="#FF9500" />
+                                <Text style={{ color: '#FF9500', fontWeight: 'bold' }}>ポイントで上位へ</Text>
+                            </Pressable>
+                            <Pressable style={[styles.inlineActionButton, { backgroundColor: isLocked ? '#334155' : activeAccentColor }]} onPress={handleToggleLock}>
+                                <Text style={{ color: activeBtnTextColor }}>{isLocked ? 'ロック解除' : 'キープ'}</Text>
+                            </Pressable>
+                        </View>
+                        
+                        <Pressable style={[styles.manageDeleteButton, { borderColor: '#FCA5A5', borderWidth: 1 }]} onPress={() => setConfirmVisible(true)}>
+                            <Text style={{ color: '#E95757' }}>この出品を削除する</Text>
+                        </Pressable>
+                    </View>
                 ) : (
-                    <Pressable style={styles.chatButton} onPress={handleStartChat}>
-                        <Ionicons name="chatbubble-ellipses-outline" size={21} color="#FFF" />
-                        <ThemedText style={styles.chatButtonText}>出品者とチャットで相談</ThemedText>
+                    <Pressable style={[styles.chatButton, { backgroundColor: chatButtonColor }]} onPress={handleStartChat}>
+                        <Text style={{ color: activeBtnTextColor, fontWeight: 'bold' }}>チャットで相談</Text>
                     </Pressable>
                 )}
             </ScrollView>
 
-            {/* 删除确认 Modal */}
+            {/* 1. 削除確認 Modal */}
             <Modal transparent={true} animationType="fade" visible={confirmVisible} onRequestClose={() => setConfirmVisible(false)}>
                 <View style={styles.modalOverlay}>
-                    <View style={styles.customAlertBox}>
-                        <View style={styles.alertIconCircle}>
-                            <Ionicons name="warning-outline" size={32} color="#FA5A5A" />
-                        </View>
-                        <ThemedText style={styles.alertTitle}>出品の削除</ThemedText>
-                        <ThemedText style={styles.alertMessage}>
-                            「{itemData.title || 'この商品'}」の出品を取り消しますか？{'\n'}この操作は取り消せません。
-                        </ThemedText>
+                    <View style={[styles.customAlertBox, { backgroundColor: cardBgColor }]}>
+                        <Text style={[styles.alertTitle, { color: textColor }]}>出品の削除</Text>
+                        <Text style={[styles.alertMessage, { color: subTextColor }]}>削除しますか？</Text>
                         <View style={styles.alertButtonRow}>
                             <Pressable style={styles.alertCancelButton} onPress={() => setConfirmVisible(false)}>
-                                <ThemedText style={styles.alertCancelText}>キャンセル</ThemedText>
+                                <Text style={{ color: isNight ? '#FFF' : '#666' }}>キャンセル</Text>
                             </Pressable>
                             <Pressable style={styles.alertConfirmButton} onPress={executeDelete}>
-                                <ThemedText style={styles.alertConfirmText}>削除する</ThemedText>
+                                <Text style={{ color: '#FFF' }}>削除</Text>
                             </Pressable>
                         </View>
                     </View>
                 </View>
             </Modal>
 
-            {/* 正在删除遮罩 Modal */}
-            <Modal transparent={true} animationType="fade" visible={isDeleting}>
+
+            <Modal transparent={true} animationType="fade" visible={customAlert.visible} onRequestClose={() => setCustomAlert(prev => ({ ...prev, visible: false }))}>
                 <View style={styles.modalOverlay}>
-                    <View style={styles.loaderContainer}>
-                        <ActivityIndicator size="large" color="#FF4D4F" />
-                        <ThemedText style={styles.loaderText}>削除しています...</ThemedText>
+                    <View style={[styles.customAlertBox, { backgroundColor: cardBgColor }]}>
+                        <Text style={[styles.alertTitle, { color: textColor }]}>{customAlert.title}</Text>
+                        <Text style={[styles.alertMessage, { color: subTextColor }]}>{customAlert.message}</Text>
+                        <View style={styles.alertButtonRow}>
+                            {customAlert.type === 'confirm' ? (
+                                <>
+                                    <Pressable style={styles.alertCancelButton} onPress={() => setCustomAlert(prev => ({ ...prev, visible: false }))}>
+                                        <Text style={{ color: isNight ? '#FFF' : '#666' }}>やめる</Text>
+                                    </Pressable>
+                                    <Pressable style={[styles.alertConfirmButton, { backgroundColor: '#FF9500' }]} onPress={customAlert.onConfirm}>
+                                        <Text style={{ color: '#FFF' }}>OK</Text>
+                                    </Pressable>
+                                </>
+                            ) : (
+                                <Pressable style={[styles.alertCancelButton, { backgroundColor: activeAccentColor, flex: 1 }]} onPress={() => setCustomAlert(prev => ({ ...prev, visible: false }))}>
+                                    <Text style={{ color: activeBtnTextColor }}>OK</Text>
+                                </Pressable>
+                            )}
+                        </View>
                     </View>
                 </View>
             </Modal>
 
-            {/* 全局底部导航栏 */}
-            <View style={styles.tabBarContainer}>
-                <View style={styles.scanBackgroundCircle} />
-                <View style={styles.tabBarBackground} />
-                <View style={styles.tabBarContent}>
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/dashboard')}>
-                        <Octicons name="home" size={24} color="#555" />
-                        <ThemedText style={styles.tabLabelBottom}>ホーム</ThemedText>
-                    </Pressable>
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/calendar')}>
-                        <FontAwesome5 name="calendar-alt" size={22} color="#555" />
-                        <ThemedText style={styles.tabLabelBottom}>ゴミカレンダー</ThemedText>
-                    </Pressable>
-                    <View style={styles.scanWrapper}>
-                        <Pressable style={styles.scanButton} onPress={() => router.push('/scan')}>
-                            <Ionicons name="scan-outline" size={26} color="#555" />
-                        </Pressable>
-                        <ThemedText style={styles.scanLabel}>ゴミスキャン</ThemedText>
+         
+            <Modal transparent={true} animationType="fade" visible={isDeleting || isActionLoading}>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.loaderContainer, { backgroundColor: cardBgColor, padding: 30, borderRadius: 16, alignItems: 'center' }]}>
+                        <ActivityIndicator size="large" color={activeAccentColor} />
+                        <Text style={[{ color: textColor, marginTop: 15 }]}>処理中...</Text>
                     </View>
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/reuse')}>
-                        <Ionicons name="refresh-circle" size={26} color="#5B9E00" />
-                        <ThemedText style={[styles.tabLabelBottom, styles.tabLabelBottomActive]}>リユース</ThemedText>
-                    </Pressable>
-                    <Pressable style={styles.tabItemBottom} onPress={() => router.push('/mypage')}>
-                        <Ionicons name="person" size={22} color="#555" />
-                        <ThemedText style={styles.tabLabelBottom}>マイページ</ThemedText>
-                    </Pressable>
                 </View>
-            </View>
+            </Modal>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    mainWrapper: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
+    mainWrapper: { flex: 1 },
+    scrollContent: { paddingHorizontal: 24, paddingTop: 50, paddingBottom: 40 },
+    topHeaderActions: { flexDirection: 'row', marginBottom: 12 },
+    backButton: { width: 40, height: 40, justifyContent: 'center' },
+    imageWrapper: { width: '100%', height: 280, marginBottom: 24 },
+    imageContainerInner: { width: '100%', height: '100%', position: 'relative' },
+    imagePlaceholder: { width: '100%', height: '100%', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+    productBigImage: { width: '100%', height: '100%', borderRadius: 24, resizeMode: 'cover' },
+    lockedImageOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.55)', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+    lockedOverlayText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+    titleContainer: { marginBottom: 14 },
+    detailTitle: { fontSize: 24, fontWeight: '800' },
+    descriptionContainer: { padding: 20, borderRadius: 16, marginBottom: 35 },
+    myManagementPanel: { width: '100%', gap: 14, marginBottom: 30 },
+    actionButtonRow: { flexDirection: 'row', gap: 12 },
+    inlineActionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 20, gap: 6 },
+    manageDeleteButton: { alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 20 },
+    chatButton: { alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 28, marginHorizontal: 12 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+    customAlertBox: { width: '85%', maxWidth: 320, borderRadius: 24, padding: 22, alignItems: 'center' },
+    alertTitle: { fontSize: 18, fontWeight: '800', marginBottom: 10 },
+    alertMessage: { fontSize: 13, marginBottom: 24, textAlign: 'center' },
+    alertButtonRow: { 
+        flexDirection: 'column', 
+        width: '100%',           
+        gap: 10,                 
     },
-    scrollContent: {
-        paddingHorizontal: 24,
-        paddingTop: 50,
-        paddingBottom: 140,
+    alertCancelButton: { 
+        width: '100%',           
+        paddingVertical: 14,     
+        borderRadius: 16, 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        backgroundColor: '#F5F5F5' 
     },
-    topHeaderActions: {
-        flexDirection: 'row',
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    backButton: {
-        width: 40,
-        height: 40,
+    alertConfirmButton: { 
+        width: '100%',           
+        paddingVertical: 14, 
+        borderRadius: 16, 
+        alignItems: 'center', 
         justifyContent: 'center',
     },
-    imageWrapper: {
-        alignItems: 'center',
-        marginBottom: 24,
-        ...Platform.select({
-            web: { boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.06)' },
-            default: {
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.06,
-                shadowRadius: 12,
-                elevation: 3,
-            }
-        })
-    },
-    imagePlaceholder: {
-        width: '100%',
-        height: 280,
-        backgroundColor: '#F4F3EF',
-        borderRadius: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    productBigImage: {
-        width: '100%',
-        height: 280,
-        borderRadius: 24,
-        backgroundColor: '#F4F3EF',
-        objectFit: 'cover',
-    },
-    titleContainer: {
-        marginBottom: 14,
-    },
-    detailTitle: {
-        fontSize: 26,
-        fontWeight: '800',
-        color: '#1A1A1A',
-        lineHeight: 34,
-    },
-    infoMetaRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 24,
-    },
-    metaLeftBadges: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    metaBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F0F5EC',
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 16,
-        gap: 4,
-    },
-    /* ❤️ 未点击时的灰色爱心圆圈 */
-    favoriteCircleButton: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
-        backgroundColor: '#F5F5F5',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#EAEAEA',
-    },
-    /* ❤️ 点击激活后的温暖淡粉红圆圈 */
-    favoriteCircleButtonActive: {
-        backgroundColor: '#FFF1F1',
-        borderColor: '#FFE0E0',
-    },
-    tagIconStyle: {
-        transform: [{ rotate: '90deg' }],
-    },
-    metaText: {
-        fontSize: 14,
-        color: '#4A5D3B',
-        fontWeight: '600',
-    },
-    descriptionContainer: {
-        backgroundColor: '#FAF9F6',
-        padding: 20,
-        borderRadius: 16,
-        marginBottom: 35,
-    },
-    detailDescription: {
-        fontSize: 15,
-        color: '#444444',
-        lineHeight: 26,
-        fontWeight: '400',
-    },
-    manageButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#E95757',
-        paddingVertical: 16,
-        borderRadius: 28,
-        gap: 8,
-        marginHorizontal: 12,
-        ...Platform.select({
-            web: { boxShadow: '0px 4px 8px rgba(233, 87, 87, 0.15)' },
-            default: {
-                shadowColor: '#E95757',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 8,
-                elevation: 3,
-            }
-        })
-    },
-    manageButtonText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#FFFFFF',
-    },
-    chatButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#76C800',
-        paddingVertical: 16,
-        borderRadius: 28,
-        gap: 8,
-        marginHorizontal: 12,
-        ...Platform.select({
-            web: { boxShadow: '0px 4px 8px rgba(118, 200, 0, 0.15)' },
-            default: {
-                shadowColor: '#76C800',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 8,
-                elevation: 3,
-            }
-        })
-    },
-    chatButtonText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#FFFFFF',
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.45)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    customAlertBox: {
-        width: '85%',
-        maxWidth: 340,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 28,
-        paddingTop: 32,
-        paddingBottom: 24,
-        paddingHorizontal: 24,
-        alignItems: 'center',
-    },
-    alertIconCircle: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#FFF1F1',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    alertTitle: {
-        fontSize: 20,
-        fontWeight: '800',
-        color: '#222222',
-        marginBottom: 12,
-        textAlign: 'center',
-    },
-    alertMessage: {
-        fontSize: 14,
-        color: '#666666',
-        lineHeight: 22,
-        textAlign: 'center',
-        marginBottom: 28,
-    },
-    alertButtonRow: {
-        flexDirection: 'row',
-        width: '100%',
-        gap: 12,
-    },
-    alertCancelButton: {
-        flex: 1,
-        backgroundColor: '#F5F5F5',
-        paddingVertical: 14,
-        borderRadius: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    alertCancelText: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: '#555555',
-    },
-    alertConfirmButton: {
-        flex: 1,
-        backgroundColor: '#EE5E5E',
-        paddingVertical: 14,
-        borderRadius: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    alertConfirmText: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: '#FFFFFF',
-    },
-    loaderContainer: {
-        backgroundColor: '#FFFFFF',
-        paddingVertical: 24,
-        paddingHorizontal: 32,
-        borderRadius: 16,
-        alignItems: 'center',
-        gap: 12,
-    },
-    loaderText: {
-        fontSize: 14,
-        color: '#444',
-        fontWeight: '600',
-    },
-    loadingCenter: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#FFF',
-    },
-    errorCenter: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 24,
-    },
-    errorText: {
-        fontSize: 16,
-        color: '#999',
-        marginBottom: 16,
-    },
-    errorButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 24,
-        backgroundColor: '#5B9E00',
-        borderRadius: 20,
-    },
-    errorButtonText: {
-        color: '#FFF',
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    tabBarContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 95,
-        justifyContent: 'flex-end',
-    },
-    tabBarBackground: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 70,
-        backgroundColor: '#D1E0C5',
-        zIndex: 1,
-    },
-    scanBackgroundCircle: {
-        position: 'absolute',
-        bottom: 30,
-        alignSelf: 'center',
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        backgroundColor: '#D1E0C5',
-        zIndex: 1,
-    },
-    tabBarContent: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'flex-end',
-        paddingBottom: 5,
-        height: 95,
-        zIndex: 2,
-    },
-    tabItemBottom: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-        height: 60,
-    },
-    tabLabelBottom: {
-        fontSize: 9,
-        color: '#555',
-        marginTop: 4,
-        fontWeight: '600',
-        textAlign: 'center',
-    },
-    tabLabelBottomActive: {
-        color: '#5B9E00',
-        fontWeight: 'bold',
-    },
-    scanWrapper: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-        height: 95,
-    },
-    scanButton: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 2,
-    },
-    scanLabel: {
-        fontSize: 9,
-        color: '#555',
-        marginTop: 2,
-        fontWeight: '700',
-        textAlign: 'center',
-    },
+    loadingCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    errorCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loaderContainer: { justifyContent: 'center', alignItems: 'center' }
 });
