@@ -26,46 +26,6 @@ export default function MyPage() {
   const pathname = usePathname();
   const { selectedDesign, setTheme } = useAppTheme();
 
-  // ----- 头像上传 Supabase -----
-  const uploadImageToSupabase = async (uri: string) => {
-    try {
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData || !authData.user) return;
-
-      const userId = authData.user.id;
-
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      const fileExt = uri.split('.').pop() || 'jpeg';
-      const fileName = `${userId}-${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, blob, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-
-      const publicUrl = publicUrlData.publicUrl;
-
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: publicUrl })
-        .eq('id', userId);
-
-      if (updateError) throw updateError;
-
-      console.log('Bilden har sparats i databasen!');
-    } catch (error) {
-      console.error('エラー:', error);
-      Alert.alert('エラー');
-    }
-  };
-
   // ----- 状态管理 -----
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [editProfileModalVisible, setEditProfileModalVisible] = useState(false);
@@ -74,8 +34,11 @@ export default function MyPage() {
   const [inquiryModalVisible, setInquiryModalVisible] = useState(false);
   const [reportModalVisible, setReportModalVisible] = useState(false);
 
+  // 主题与积分相关 Modal
   const [themeSuccessVisible, setThemeSuccessVisible] = useState(false);
+  const [insufficientPointsModalVisible, setInsufficientPointsModalVisible] = useState(false);
   const [themeName, setThemeName] = useState('');
+
   const [inquiryText, setInquiryText] = useState('');
   const [reportText, setReportText] = useState('');
   const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
@@ -101,6 +64,49 @@ export default function MyPage() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   const maxPoints = 30;
+
+  // ----- 头像上传 Supabase -----
+  const uploadImageToSupabase = async (uri: string) => {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData || !authData.user) return;
+
+      const userId = authData.user.id;
+
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpeg';
+      const fileName = `${userId}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, blob, {
+          contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      const publicUrl = publicUrlData.publicUrl;
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', userId);
+
+      if (updateError) throw updateError;
+
+      setProfileImage(publicUrl);
+    } catch (error) {
+      console.error('エラー:', error);
+      Alert.alert('エラー', '画像のアップロードに失敗しました。');
+    }
+  };
 
   // ----- 动画逻辑（积分 & 进度条） -----
   const animatedPoints = useRef(new Animated.Value(0)).current;
@@ -138,7 +144,6 @@ export default function MyPage() {
   const cafeBackgroundColor = '#ffffff';
 
   const kawaiiTextColor = '#6B4E3C';
-  const kawaiiAccentColor = '#A4C3A2';
   const kawaiiBackgroundColor = '#FCF5F0';
   const kawaiiPeachPink = '#F4A396';
 
@@ -186,7 +191,6 @@ export default function MyPage() {
           setProfileImage(profile.avatar_url);
         }
 
-        // 绑定数据库中的积分（若不存在则默认为 0）
         if (typeof profile.points === 'number') {
           setPoints(profile.points);
         } else {
@@ -244,7 +248,7 @@ export default function MyPage() {
   const boostItemToTopPage = async (itemId: string) => {
     const boostCost = 5;
     if (points < boostCost) {
-      Alert.alert('ポイント不足', 'ポイントが足りません');
+      setInsufficientPointsModalVisible(true);
       return;
     }
     try {
@@ -260,12 +264,7 @@ export default function MyPage() {
       if (dbError) throw dbError;
       setPoints(newPoints);
 
-      const successMessage = 'トップページに優先表示するために5ポイントを使用しました。';
-      if (Platform.OS === 'web') {
-        alert(successMessage);
-      } else {
-        Alert.alert('成功', successMessage);
-      }
+      Alert.alert('成功', 'トップページに優先表示するために5ポイントを使用しました。');
       setExpandedSections((prev) => ({ ...prev, display: false }));
     } catch (error) {
       console.error('商品の優先表示に失敗しました。:', error);
@@ -310,8 +309,7 @@ export default function MyPage() {
 
   const handleSendTicket = async (type: 'inquiry' | 'report', content: string) => {
     if (!content.trim()) {
-      const emptyMsg = '内容を入力してください。';
-      Platform.OS === 'web' ? alert(emptyMsg) : Alert.alert('入力エラー', emptyMsg);
+      Alert.alert('入力エラー', '内容を入力してください。');
       return;
     }
     setIsSubmittingTicket(true);
@@ -331,11 +329,7 @@ export default function MyPage() {
           ? 'お問い合わせを受け付けました。ご返信までしばらくお待ちください。'
           : '不具合報告を送信しました。ご協力ありがとうございました。';
 
-      if (Platform.OS === 'web') {
-        alert(successMsg);
-      } else {
-        Alert.alert('送信が完了しました', successMsg);
-      }
+      Alert.alert('送信が完了しました', successMsg);
 
       if (type === 'inquiry') {
         setInquiryText('');
@@ -346,8 +340,7 @@ export default function MyPage() {
       }
     } catch (err) {
       console.error('Ticket submission failed:', err);
-      const errorMsg = '送信に失敗しました。ネットワーク状況を確認してください。';
-      Platform.OS === 'web' ? alert(errorMsg) : Alert.alert('エラー', errorMsg);
+      Alert.alert('エラー', '送信に失敗しました。ネットワーク状況を確認してください。');
     } finally {
       setIsSubmittingTicket(false);
     }
@@ -384,6 +377,7 @@ export default function MyPage() {
     { id: 'cafe', name: 'カフェモード', cost: 5, icon: '☕' },
   ];
 
+  // ----- 兑换主题 -----
   const spendPoints = async (amount: number, designMode: ThemeType) => {
     if (unlockedThemes.includes(designMode) || amount === 0) {
       setTheme(designMode);
@@ -430,11 +424,7 @@ export default function MyPage() {
         Alert.alert('エラー', '処理に失敗しました。');
       }
     } else {
-      if (Platform.OS === 'web') {
-        alert('ポイント不足: ポイントが足りません');
-      } else {
-        Alert.alert('ポイント不足', 'ポイントが足りません');
-      }
+      setInsufficientPointsModalVisible(true);
     }
   };
 
@@ -450,14 +440,7 @@ export default function MyPage() {
   };
 
   const handleLogout = () => {
-    if (Platform.OS === 'web') {
-      setLogoutModalVisible(true);
-    } else {
-      Alert.alert('ログアウト', 'ログアウトしてもよろしいですか？', [
-        { text: 'キャンセル', style: 'cancel' },
-        { text: 'ログアウト', style: 'destructive', onPress: executeSignOut },
-      ]);
-    }
+    setLogoutModalVisible(true);
   };
 
   return (
@@ -482,16 +465,37 @@ export default function MyPage() {
                 <View style={styles.themeIcon}>
                   <Ionicons name="checkmark-circle" size={60} color="#5B9E00" />
                 </View>
-
                 <ThemedText style={styles.themeTitle}>着せ替え完了！</ThemedText>
-
                 <ThemedText style={styles.themeText}>{themeName} に変更しました✨</ThemedText>
-
                 <TouchableOpacity
                   style={styles.themeButton}
                   onPress={() => setThemeSuccessVisible(false)}
                 >
                   <ThemedText style={styles.themeButtonText}>OK</ThemedText>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/* 1:1 还原截屏中的“ポイント不足”Modal */}
+          <Modal
+            transparent
+            visible={insufficientPointsModalVisible}
+            animationType="fade"
+            onRequestClose={() => setInsufficientPointsModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.exactModalCard}>
+                <ThemedText style={styles.exactModalTitle}>ポイント不足</ThemedText>
+                <ThemedText style={styles.exactModalDescription}>
+                  {`ポイントが不足しています。（現在のポイント:\n${points} Pt）`}
+                </ThemedText>
+                <TouchableOpacity
+                  style={styles.exactOkButton}
+                  onPress={() => setInsufficientPointsModalVisible(false)}
+                  activeOpacity={0.8}
+                >
+                  <ThemedText style={styles.exactOkButtonText}>OK</ThemedText>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1389,44 +1393,62 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: -130,
   },
-  modalContent: {
-    width: 310,
+
+  /* ----- 1:1 还原截屏样式 ----- */
+  exactModalCard: {
+    width: '78%',
+    maxWidth: 320,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
+    borderRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 24,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  modalTitle: { fontSize: 18, fontWeight: '600', color: '#333333' },
-  modalText: {
-    fontSize: 14,
-    color: '#666666',
+  exactModalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#000000',
+    marginBottom: 16,
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 22,
+    letterSpacing: 0.5,
   },
-  modalButtonGroup: { flexDirection: 'row', gap: 12, width: '100%' },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
+  exactModalDescription: {
+    fontSize: 15,
+    color: '#555555',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 28,
+    fontWeight: '400',
+  },
+  exactOkButton: {
+    width: '100%',
+    backgroundColor: '#589F00',
+    paddingVertical: 14,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 1.5,
+    borderColor: '#2B7A00',
   },
-  modalButtonCancel: { backgroundColor: '#FFFFFF', borderColor: '#E0E0E0' },
+  exactOkButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    letterSpacing: 0.8,
+  },
+
+  modalTitle: { fontSize: 18, fontWeight: '600', color: '#333333' },
   modalButtonConfirm: { backgroundColor: '#5B9E00', borderColor: '#5B9E00' },
-  modalButtonTextCancel: { fontSize: 14, color: '#666666', fontWeight: '500' },
   modalButtonTextConfirm: { fontSize: 14, color: '#FFFFFF', fontWeight: '600' },
   editModalContent: {
     width: '90%',
@@ -1638,7 +1660,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
-  scanBackgroundCircle: { display: 'none' },
 
   logoutModalContent: {
     width: 320,
